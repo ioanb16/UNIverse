@@ -2,6 +2,7 @@
 """Generates the Uni-Verse Cardiff site pages with a shared shell."""
 import os
 import json
+import re
 
 OUT = os.path.dirname(os.path.abspath(__file__))
 
@@ -38,7 +39,7 @@ ICONS = {
     'map': '<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M1 6l7-3 8 3 7-3v15l-7 3-8-3-7 3V6z"/><path stroke-linecap="round" d="M8 3v15M16 6v15"/></svg>',
     'close': '<svg fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" d="M6 6l12 12M18 6L6 18"/></svg>',
     'bucs': '<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 21h8M12 17v4M7 4h10v5a5 5 0 01-10 0V4z"/><path stroke-linecap="round" d="M7 5H4a1 1 0 00-1 1v1a4 4 0 004 4M17 5h3a1 1 0 011 1v1a4 4 0 01-4 4"/></svg>',
-    'flatmates': '<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path stroke-linecap="round" stroke-linejoin="round" d="M10.8 12.2L21 2M21 2v5M21 2h-5M16.5 6.5L19 9"/></svg>',
+    'flatmates': '<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 11l9-8 9 8"/><path stroke-linecap="round" stroke-linejoin="round" d="M5 10v9a2 2 0 002 2h10a2 2 0 002-2v-9"/><path stroke-linecap="round" stroke-linejoin="round" d="M9 21v-6h6v6"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 6.5V4h3v4.5"/></svg>',
     'plus': '<svg fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><path stroke-linecap="round" d="M12 5v14M5 12h14"/></svg>',
     'shield': '<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-4z"/></svg>',
     'phone': '<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M22 16.9v3a2 2 0 01-2.2 2 19.8 19.8 0 01-8.6-3.1 19.5 19.5 0 01-6-6 19.8 19.8 0 01-3.1-8.7A2 2 0 014.1 2h3a2 2 0 012 1.7c.1.9.3 1.8.6 2.7a2 2 0 01-.4 2.1L8 9.9a16 16 0 006 6l1.4-1.4a2 2 0 012.1-.4c.9.3 1.8.5 2.7.6a2 2 0 011.8 2.2z"/></svg>',
@@ -53,7 +54,7 @@ def going_color(n):
     return '#FF4757'
 
 NAV = [
-    ('index.html', 'feed', 'Home'),
+    ('feed.html', 'feed', 'Home'),
     ('events.html', 'events', 'Events'),
     ('societies.html', 'societies', 'Societies'),
     ('bucs.html', 'bucs', 'BUCS'),
@@ -91,17 +92,9 @@ SEARCH_INDEX = [
     {'t': 'Exeter vs Cardiff', 'c': 'BUCS', 'u': 'bucs.html', 'd': 'Wed 4 Nov · Away · Super Rugby'},
     # Societies
     {'t': 'Film Society', 'c': 'Society', 'u': 'society-film.html', 'd': '1,240 members'},
-    {'t': 'Hiking & Mountaineering', 'c': 'Society', 'u': 'society-hiking.html', 'd': '860 members'},
-    {'t': 'Entrepreneurs Society', 'c': 'Society', 'u': 'society-entrepreneurs.html', 'd': '1,510 members'},
-    {'t': 'Drama Society', 'c': 'Society', 'u': 'society-drama.html', 'd': '740 members'},
-    {'t': 'Football Club', 'c': 'Society', 'u': 'society-football.html', 'd': '2,100 members'},
-    {'t': 'International Students', 'c': 'Society', 'u': 'society-international.html', 'd': '1,880 members'},
     {'t': 'Netball Club', 'c': 'Society', 'u': 'society-netball.html', 'd': '980 members'},
     {'t': 'Music Society', 'c': 'Society', 'u': 'society-music.html', 'd': '690 members'},
-    {'t': 'Debate Society', 'c': 'Society', 'u': 'society-debate.html', 'd': '410 members'},
-    {'t': 'RAG Society', 'c': 'Society', 'u': 'society-rag.html', 'd': '560 members'},
     {'t': 'Photography Society', 'c': 'Society', 'u': 'society-photography.html', 'd': '730 members'},
-    {'t': 'Pride Society', 'c': 'Society', 'u': 'society-pride.html', 'd': '890 members'},
     # Discounts
     {'t': 'Brewhouse Coffee', 'c': 'Discount', 'u': 'discounts.html', 'd': 'Cathays · 25% off'},
     {'t': 'Got Beef', 'c': 'Discount', 'u': 'discounts.html', 'd': 'City Centre · Free side'},
@@ -136,7 +129,7 @@ SEARCH_INDEX = [
     {'t': 'Cardiff University Sports Fields', 'c': 'Venue', 'u': 'map.html', 'd': 'Llanrumney · BUCS'},
     {'t': 'Cardiff Arms Park', 'c': 'Venue', 'u': 'map.html', 'd': 'City Centre · BUCS'},
     # Pages
-    {'t': 'Home', 'c': 'Page', 'u': 'index.html', 'd': 'Your feed'},
+    {'t': 'Home', 'c': 'Page', 'u': 'feed.html', 'd': 'Your feed'},
     {'t': 'Events', 'c': 'Page', 'u': 'events.html', 'd': "What's on"},
     {'t': 'Societies', 'c': 'Page', 'u': 'societies.html', 'd': 'Find your people'},
     {'t': 'BUCS', 'c': 'Page', 'u': 'bucs.html', 'd': 'Cardiff University sport'},
@@ -149,12 +142,175 @@ SEARCH_INDEX = [
     {'t': 'Ask Uni-Verse AI', 'c': 'Page', 'u': 'ai.html', 'd': 'Your Cardiff guide'},
 ]
 
+# Lightweight thread metadata for the notification bell (must match the slugs/names
+# used in build_messages()'s msg_thread() calls). Not the full conversations —
+# those only need to exist in the DOM of messages.html itself.
+NOTIF_THREADS = [
+    {'slug': 'priya', 'name': 'Priya', 'preview': "Thursday's perfect, come by around 4pm — I'll send the address", 'unread': True},
+    {'slug': 'jack', 'name': 'Jack', 'preview': "Oh nice, I might know someone actually — I'll ask and get back to you", 'unread': False},
+    {'slug': 'careers', 'name': 'Cardiff Careers', 'preview': "Quick tip: tailor your cover letter to the 'why Admiral' question", 'unread': False},
+    {'slug': 'filmsoc', 'name': 'Film Society', 'preview': 'Welcome to Film Society! First screening is Thursday, 7pm, SU Cinema', 'unread': False},
+]
+
 # Leaflet (OpenStreetMap) — no API key needed, used on the venue map page
 LEAFLET_CSS = '<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">'
 LEAFLET_JS = '<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>'
 
 # Cardiff SU's own societies page — the official place to actually join (used on the Societies page)
 SU_SOCIETIES_URL = 'https://www.cardiffstudents.com/activities/societies/'
+
+# The full real society directory, pulled from the Cardiff SU societies page above (categories and
+# names as listed there). The dozen "featured" societies above already have their own full page
+# (chat/timetable/events/kit) — 'Film Society', 'Music Society' and 'Photography Society' are excluded
+# here since they're already those featured cards under a matching real name, so they're not duplicated.
+# 'Society Executive Committee' is left out too — it's the SU's own governance body, not a society to join.
+REAL_SOCIETIES = [
+    # Sports clubs, from the Athletic Union's own club list — a separate part of the SU from the
+    # societies below. 'Netball Club' is excluded since it's already the featured card above.
+    ('Sport', [
+        'Aerial Fitness', 'Aikido Club', 'American Football Club', 'Archery Club', 'Athletics Club',
+        'Badminton Club', 'Baseball and Softball Club', 'Boxing Club', 'Cardiff Medicals Rugby',
+        'Cardiff Snakecharmers Cheerleading', 'Cardiff University Barbell Club',
+        'Caving & Canyoning Club', 'Clay Pigeon Shooting Club', 'Cuesports Club', 'Cycling Club',
+        'Dancesport Club', 'Darts Club', 'Dodgeball Club', 'Equestrian Club', 'Fencing Club',
+        'Gaelic Football Club', 'Golf Club', 'Gymnastics Club', 'Hiking Club', 'Ice Hockey Club',
+        'Ice Skating Club', 'Jiu Jitsu Club', 'Karate Club', 'Kayaking Club', 'Kickboxing Club',
+        'Korfball Club', 'Kung Fu Club', 'Lacrosse Club', 'Medics Basketball Club',
+        'Medics Football Club', "Medics Men's Hockey Club", 'Medics Netball Club',
+        'Medics Squash Club', "Medics Women's Hockey Club", "Men's Basketball Club",
+        "Men's Cricket Programme", "Men's Football Club", "Men's Futsal Club", "Men's Hockey Club",
+        "Men's Rugby Club", 'Mixed Martial Arts (MMA)', 'Motorsports Club', 'Mountain Biking Club',
+        'Mountaineering Club', 'Padel Club', 'Polo Club', 'Rifle and Pistol Club', 'Rounders Club',
+        'Rowing Club', 'Rugby League Club', 'Sailing Club', 'Scuba Diving Club', 'Snowsports Club',
+        'Squash Club', 'Surf Sports', 'Swimming & Waterpolo Club', 'Table Tennis Club',
+        'Taekwon-Do Club', 'Tennis Club', 'Touch Rugby Club', 'Trampoline Club', 'Triathlon Club',
+        'Ultimate Frisbee Club', 'Volleyball Club', 'Windsurfing Club', "Women's Basketball Club",
+        "Women's Cricket Club", "Women's Football Club", "Women's Hockey Club", "Women's Rugby Club",
+    ]),
+    ('Activity & Appreciation', [
+        'AI Safety Cardiff University', 'AIESEC', 'Airsoft Society', 'Alternative Music Society',
+        'Anime Society', 'Baking Society', 'Book Club', 'Bridge Society',
+        'Cardiff Regular and Irregular Tabletop Society', 'Cardiff Students for Sustainability',
+        'Cardiff University Investment Society', 'Cardiff University Pilates and Wellbeing Society',
+        'Coffee Society', 'Creative Writing Society', 'DIY Society', 'Doctor Who Society', 'Dog Society',
+        'Esports Society', 'Film Production Society', 'Finance and Trading', 'Formula One Society',
+        'FurSoc', 'Gaming Society', 'Grimsoc', 'Hooked Society', 'James Kimberley Chess Society',
+        'Lana Del Rey Society', 'Make a Smile Cardiff', 'Medieval Re-enactment Society',
+        'Model United Nations Society', 'Musicals Society', 'Ornithological Society', 'Poker Society',
+        'Public Speaking Society', 'Quiz Society', 'Real Ale Society', 'Sci-Fi & Fantasy Society',
+        'Skate Society', 'SoberSoc', 'Taylor Swift Society', 'Tegestology Society', 'Twilight Society',
+        'Vegetarian & Vegan Society', 'Vocaloid Society', 'Wet Dippers Wild Swimming Society',
+        'Women in Music Society', 'Y Gym Gym', 'Yoga Society',
+    ]),
+    ('Course Based', [
+        'Ancient History, Archaeology & Conservation Society', 'Bar Society', 'Bioscience Society',
+        'Business School Society', 'Chaos Society', 'Chemistry Society', 'CyberSoc', 'Earth Society',
+        'Engineering Society', 'French Society', 'German Society', 'HistorySoc', 'Japanese Society',
+        'Law Society Cardiff', 'Maths Society', 'Optometry Society', 'Philosophy Society',
+        'Politics Society', 'Psychology Society', 'SAWSA - Architecture Society', 'Social Sciences Society',
+        'Spanish and Latin American Society', 'TECSoc', 'Women in Law Society', 'Women in STEM',
+        'WPSA Pharmaceutical Society',
+    ]),
+    ('Cultural & International', [
+        'Abacus', 'African Caribbean Medical Association', 'African Caribbean Society', 'Asian Society',
+        'Bangladesh Society', 'Cardiff Malayali Society', 'Cardiff University American Students Society',
+        'Cardiff West Indian Society', 'Chinese Society', 'Filipino Society', 'Hong Kong Society',
+        'Indian Society', 'Indonesian Society', 'Irish Society', 'Kurdish Society',
+        'Malaysian Students Society', 'Middle Eastern and North African Society', 'Nepali Society',
+        'Pakistani Society', 'Pashtun Society', 'Persian/Iranian Society', 'Polish Society',
+        'Punjabi Society', 'Russian Speaking Society', 'Saudi Society', 'Singapore Society',
+        'Sri Lankan Society', 'Tamil Society', 'Turkish Society', 'Ukrainian Society',
+    ]),
+    ('Discussion, Campaign & Awareness', [
+        'ATMA Society', 'Cardiff LINKS', 'CoppaFeel Society', 'CU Equal Opportunities Law Society',
+        'CU Pride (LGBT+ Society)', 'Debating Society', 'Feminist Society',
+        'Friends of David Nott Foundation', 'Marrow Society',
+        'Neurodiverse Opportunity, Visibility and Inclusivity Society', 'Raise and Give', 'Sapphic Society',
+        'STAR - Student Action for Refugees', 'Students for Global Health Society',
+        'Students for Organ Donation', 'Sustainable Fashion Society', 'TANGGS',
+        'Wildlife and Conservation Society', 'Women Leaders of Afrika Society',
+    ]),
+    ('Health Based', [
+        'Cardiff Anaesthetics, Perioperative and Intensive Care Society (CAPS)',
+        'Cardiff Healthcare International Perspectives', 'Cardiff Pre-hospital and Emergency Medicine Society',
+        'Cardiff Student Psychiatry Society', 'Cardiff University Acute Medicine Society',
+        'Cardiff University Women in Surgery Society', 'Cardiothoracics Society',
+        'Christian Medical Fellowship', 'Clinical Neuroscience Society', 'Clwb y Mynydd Bychan',
+        'Dermatology Society', 'GP Society', 'MedEd', 'MedSoc', 'Midwifery Society', 'NurSoc',
+        'Ophthalmology Society', 'PACS', 'Paediatric Society', 'Pharmacology Society',
+        'Sports and Exercise Medicine', 'Surgical Society', 'Teddy Bear Hospital',
+        'Wilderness and Expedition Medicine', "Women's Health, Obstetrics and Gynaecology Society",
+    ]),
+    ('Performance & Artistic', [
+        'A Cappella Society', 'Act One Drama Society', 'Art Society', 'Belly Dancing Society',
+        'Blank Verse', 'Bollywood Dance Society', 'Brass Band Society', 'Broadway Dance Society',
+        'CU Heels Dance Society', 'Expression Dance Society', 'FAD (Dance Society)',
+        'Healthcare Drama Society', 'Healthcare Music Society', 'Jazz Society',
+        'KChoreo - KPop Dance Society', 'Live Music Society', 'Show Choir', 'Slash Hip Hop Dance',
+        'Traffic DJ Society', 'Windband',
+    ]),
+    ('Political & Ideological', [
+        'Ahlul Bayt Society', 'Cardiff University Catholic Society', 'Christian Union',
+        'Green Party Society', 'Islamic Society', 'Jewish Society', 'Kharis On Campus',
+        'Labour Students Society', 'Marxist Society', 'NHSF Cardiff Hindu Society', 'Sikh Society',
+    ]),
+    ('Student Led Services', ['Stronger Together', 'Student Minds']),
+    ('Student Media', ['CUTV', 'Gair Rhydd', 'Quench', 'Xpress Radio']),
+    ('Other', ['Housing Action', 'Medics Grad Ball', 'Nightline', 'SHAG', 'Web Design Society']),
+]
+
+def _slugify(name):
+    s = re.sub(r'[^a-z0-9]+', '-', name.lower()).strip('-')
+    return 'su-' + s
+
+# One or two letters standing in for a real logo, same idea as the initials used for people
+# (e.g. the "FW" profile avatar) — just applied to a society name instead.
+def _initials(name):
+    words = re.findall(r"[A-Za-z0-9]+", name)
+    if not words:
+        return '?'
+    if len(words) == 1:
+        return words[0][:2].upper()
+    return (words[0][0] + words[1][0]).upper()
+
+_ROW_COLORS = ['var(--lime)', 'var(--sky)', 'var(--coral)', 'var(--amber)']
+
+# Feed the whole real directory into the sitewide topbar search too, so any of the 265 real
+# societies/sports clubs turns up from anywhere on the site, not just the Societies page itself.
+for _cat, _names in REAL_SOCIETIES:
+    for _name in _names:
+        SEARCH_INDEX.append({'t': _name, 'c': _cat, 'u': 'societies.html?soc=' + _slugify(_name), 'd': _cat})
+
+def soc_dir_row(name, category, color):
+    slug = _slugify(name)
+    return ('<div class="soc-row" data-cat="%s" data-search="%s">'
+            '<div class="soc-row-ava" style="background:%s">%s</div>'
+            '<div class="soc-row-body"><div class="soc-row-name">%s</div>'
+            '<div class="soc-row-cat">%s</div></div>'
+            '<button class="soc-join" data-society="%s">Join</button></div>'
+            % (category, name.lower(), color, _initials(name), name, category, slug))
+
+def build_soc_directory():
+    rows = []
+    for i, (category, names) in enumerate(REAL_SOCIETIES):
+        color = _ROW_COLORS[i % len(_ROW_COLORS)]
+        for name in names:
+            rows.append(soc_dir_row(name, category, color))
+    cat_chips = ''.join('<div class="chip" data-cat="%s">%s</div>' % (c, c) for c, _ in REAL_SOCIETIES)
+    total = sum(len(names) for _, names in REAL_SOCIETIES)
+    search_bar = ('<div class="map-search soc-dir-search">%s'
+                  '<input type="text" id="socDirSearch" autocomplete="off" '
+                  'placeholder="Search all %s Cardiff societies by name…">'
+                  '<span class="match-count" id="socDirMatchCount"></span>'
+                  '<button class="clear-search" id="socDirSearchClear" aria-label="Clear search">%s</button></div>'
+                  % (ICONS['search'], total, ICONS['close']))
+    return ('<div class="soc-dir-head"><h2>Every Cardiff society &amp; sports club</h2>'
+            '<div class="sub">The full Cardiff SU societies directory, plus every Athletic Union sports club — %s in total. These are simple, joinable listings; the twelve above are the ones with their own space on Uni-Verse.</div></div>'
+            '%s'
+            '<div class="chips soc-dir-chips" data-filter-grid="socDirGrid"><div class="chip on" data-cat="">All</div>%s</div>'
+            '<div class="soc-dir-grid" id="socDirGrid">%s</div>'
+            '<div class="empty-state" id="socDirEmpty" hidden>No societies match “<span id="socDirEmptyQuery"></span>”.</div>'
+            % (total, search_bar, cat_chips, ''.join(rows)))
 
 def rail(active):
     btns = ['<div class="rail-logo">U</div>']
@@ -173,7 +329,13 @@ def topbar():
             'placeholder="Search events, societies, jobs, discounts…">'
             '<div class="search-results" id="topSearchResults" hidden></div></div>'
             '<div class="top-actions">'
-            '<button class="icon-btn"><span class="dot"></span>%s</button>'
+            '<div class="notif-wrap">'
+            '<button class="icon-btn" id="notifBtn" aria-label="Notifications"><span class="dot" id="notifDot" hidden></span>%s</button>'
+            '<div class="notif-panel" id="notifPanel" hidden>'
+            '<div class="notif-panel-head"><h4>Notifications</h4>'
+            '<button class="notif-mark-all" id="notifMarkAll" type="button" hidden>Mark all read</button></div>'
+            '<div class="notif-list" id="notifList"></div>'
+            '</div></div>'
             '<a class="icon-btn" href="messages.html" aria-label="Messages">%s</a>'
             '</div></header>' % (ICONS['search'], ICONS['bell'], ICONS['chat']))
 
@@ -267,8 +429,8 @@ def sidebar_week():
 def sidebar_socs():
     socs = [
         ('🎬', 'linear-gradient(135deg,var(--lime),var(--sky))', 'Film Society', '+180 joined this week'),
-        ('🥾', 'linear-gradient(135deg,var(--coral),var(--amber))', 'Hiking & Mountaineering', '+142 joined this week'),
-        ('💼', 'linear-gradient(135deg,var(--sky),var(--lime))', 'Entrepreneurs Society', '+119 joined this week'),
+        ('🏐', 'linear-gradient(135deg,var(--coral),var(--amber))', 'Netball Club', '+142 joined this week'),
+        ('🎌', 'linear-gradient(135deg,var(--sky),var(--lime))', 'Anime Society', '+119 joined this week'),
     ]
     rows = []
     for emoji, bg, name, meta in socs:
@@ -280,7 +442,7 @@ def sidebar_socs():
 
 # ---------------- POST cards for feed ----------------
 def post_social():
-    return ('<article class="post"><span class="accent-edge" style="background:var(--coral)"></span>'
+    return ('<article class="post" data-cat="Social Societies"><span class="accent-edge" style="background:var(--coral)"></span>'
             '<div class="post-top"><div class="post-ava" style="background:linear-gradient(135deg,var(--coral),var(--amber))">CS</div>'
             '<div class="post-meta"><div class="org">Cardiff Computer Science Society%s</div>'
             '<div class="time">Posted 2h ago · reposted from @cardiffcompsci</div></div>'
@@ -291,14 +453,16 @@ def post_social():
             '<div class="bit">%s Students\' Union, Y Plas</div>'
             '<div class="bit">%s 84 going</div></div>'
             '<div class="post-foot"><div class="react"><span>♥ 126</span><span>💬 18</span><span>↗ Share</span></div>'
-            '<div class="post-actions"><button class="pill">Save</button>'
+            '<div class="post-actions"><button class="pill save-toggle" data-save-id="event:Games Night + Pizza" '
+            'data-save-title="Games Night + Pizza" data-save-type="Social" data-save-url="events.html" '
+            'data-save-meta="Thu 2 Oct · Students\' Union, Y Plas" data-save-color="var(--coral)">Save</button>'
             '<button class="pill coral" data-rsvp="You\'re in 🎉" data-cal-title="Games Night + Pizza" '
             'data-cal-date="2026-10-02" data-cal-time="7:00pm" data-cal-place="Students\' Union, Y Plas" '
             'data-cal-color="var(--coral)">I\'m going</button></div></div></article>'
             % (VERIFY, ICONS['cal'], ICONS['pin'], ICONS['people']))
 
 def post_deal():
-    return ('<article class="post deal"><span class="accent-edge" style="background:var(--lime)"></span>'
+    return ('<article class="post deal" data-cat="Discounts Affiliates"><span class="accent-edge" style="background:var(--lime)"></span>'
             '<div class="deal-badge">-25%</div>'
             '<div class="post-top"><div class="post-ava" style="background:var(--lime)">☕</div>'
             '<div class="post-meta"><div class="org">Brewhouse Coffee · Cathays</div>'
@@ -310,7 +474,7 @@ def post_deal():
             '<button class="pill primary">Get code</button></div></div></article>')
 
 def post_job():
-    return ('<article class="post"><span class="accent-edge" style="background:var(--sky)"></span>'
+    return ('<article class="post" data-cat="Professional Affiliates"><span class="accent-edge" style="background:var(--sky)"></span>'
             '<div class="post-top"><div class="post-ava" style="background:linear-gradient(135deg,var(--sky),var(--lime))">CC</div>'
             '<div class="post-meta"><div class="org">Cardiff University Careers%s</div>'
             '<div class="time">Posted today · links out to the employer</div></div>'
@@ -319,13 +483,16 @@ def post_job():
             '<p>Paid 10-week placement in Cardiff. Open to 2nd &amp; penultimate-year students. Applications close 14 Nov.</p>'
             '<div class="post-info"><div class="bit">%s £24k pro-rata</div>'
             '<div class="bit">%s Cardiff / Hybrid</div><div class="bit">%s Closes 14 Nov</div></div>'
-            '<div class="post-foot"><div class="react"><span>🔖 Save</span><span>↗ Share</span></div>'
+            '<div class="post-foot"><div class="react"><span class="save-toggle" data-save-id="opportunity:Summer Internship — Admiral, Data Analyst" '
+            'data-save-title="Summer Internship — Admiral, Data Analyst" data-save-type="Opportunity" '
+            'data-save-url="opportunities.html" data-save-meta="Admiral · £24k pro-rata · Closes 14 Nov" '
+            'data-save-color="var(--sky)" data-saved-label="🔖 Saved ✓">🔖 Save</span><span>↗ Share</span></div>'
             '<div class="post-actions"><button class="pill">Details</button>'
             '<button class="pill primary">Apply on site %s</button></div></div></article>'
             % (VERIFY, ICONS['money'], ICONS['pin'], ICONS['clock'], ICONS['ext']))
 
 def post_workshop():
-    return ('<article class="post"><span class="accent-edge" style="background:var(--amber)"></span>'
+    return ('<article class="post" data-cat="Professional Societies"><span class="accent-edge" style="background:var(--amber)"></span>'
             '<div class="post-top"><div class="post-ava" style="background:linear-gradient(135deg,var(--amber),var(--coral))">EW</div>'
             '<div class="post-meta"><div class="org">Enactus Cardiff%s</div>'
             '<div class="time">Posted yesterday</div></div>'
@@ -335,7 +502,9 @@ def post_workshop():
             '<div class="post-info"><div class="bit">%s Wed 8 Oct · 5:30pm</div>'
             '<div class="bit">%s sbarc | spark</div></div>'
             '<div class="post-foot"><div class="react"><span>♥ 61</span><span>💬 7</span></div>'
-            '<div class="post-actions"><button class="pill">Save</button>'
+            '<div class="post-actions"><button class="pill save-toggle" data-save-id="event:CV Clinic + Networking" '
+            'data-save-title="CV Clinic + Networking" data-save-type="Workshop" data-save-url="events.html" '
+            'data-save-meta="Wed 8 Oct · sbarc | spark" data-save-color="var(--amber)">Save</button>'
             '<button class="pill primary" data-rsvp="Reserved ✓" data-cal-title="CV Clinic + Networking" '
             'data-cal-date="2026-10-08" data-cal-time="5:30pm" data-cal-place="sbarc | spark" '
             'data-cal-color="var(--amber)">Reserve spot</button></div></div></article>'
@@ -346,13 +515,13 @@ def build_feed():
     body = ('<div class="content two-col"><div class="feed-col">'
             '<div class="greeting"><div class="hi display">Alright, Findlay <span class="wave">👋</span></div>'
             '<div class="sub">3 events near you this week · 2 new opportunities in your field · Freshers\' Fair is live</div></div>'
-            '<div class="chips"><div class="chip on">Everything</div>'
-            '<div class="chip"><span class="cd" style="background:var(--coral)"></span>Social</div>'
-            '<div class="chip"><span class="cd" style="background:var(--sky)"></span>Professional</div>'
-            '<div class="chip"><span class="cd" style="background:var(--lime)"></span>Discounts</div>'
-            '<div class="chip"><span class="cd" style="background:var(--amber)"></span>Societies</div>'
-            '<div class="chip">Affiliates</div></div>'
-            '<div class="feed">%s%s%s%s</div></div>'
+            '<div class="chips" data-filter-grid="feedGrid"><div class="chip on">Everything</div>'
+            '<div class="chip" data-cat="Social"><span class="cd" style="background:var(--coral)"></span>Social</div>'
+            '<div class="chip" data-cat="Professional"><span class="cd" style="background:var(--sky)"></span>Professional</div>'
+            '<div class="chip" data-cat="Discounts"><span class="cd" style="background:var(--lime)"></span>Discounts</div>'
+            '<div class="chip" data-cat="Societies"><span class="cd" style="background:var(--amber)"></span>Societies</div>'
+            '<div class="chip" data-cat="Affiliates">Affiliates</div></div>'
+            '<div class="feed" id="feedGrid">%s%s%s%s</div></div>'
             '<aside class="side-col">%s%s%s%s</aside></div>'
             % (post_social(), post_deal(), post_job(), post_workshop(),
                sidebar_ai(), sidebar_journey(), sidebar_week(), sidebar_socs()))
@@ -360,17 +529,29 @@ def build_feed():
 
 # ================= PAGE: EVENTS =================
 def event_card(emoji, bg, cat, catcol, title, org, verified, date, place, going, cta, iso_date, color,
-                ticket_url='', ticket_label='', freshers=False):
+                ticket_url='', ticket_label='', freshers=False, page_url='events.html', venue='', extra_cat=''):
     v = VERIFY if verified else ''
     cal_time = date.split(' · ')[-1]
     ticket_html = ''
     if ticket_url:
         ticket_html = ('<a class="ticket-link" href="%s" target="_blank" rel="noopener">%s %s</a>'
                         % (ticket_url, ticket_label, ICONS['ext']))
-    freshers_attr = ' data-freshers="1"' if freshers else ''
+    # extra data attributes that make the page's filter chips actually filter, on top of the
+    # visible chip-cat badge: real category (can carry more than one, space-separated), whether
+    # it's free to attend (inferred from having no paid ticket link), which "side" for BUCS fixtures.
+    cat_value = (cat + (' ' + extra_cat if extra_cat else '')).strip()
+    extra_attrs = ' data-cat="%s" data-date="%s"' % (cat_value, iso_date)
+    if freshers:
+        extra_attrs += ' data-freshers="1"'
+    if not ticket_url:
+        extra_attrs += ' data-free="1"'
+    if venue:
+        extra_attrs += ' data-venue="%s"' % venue
+    save_id = 'event:' + title
     return ('<div class="card"%s><div class="card-media" style="background:%s">'
             '<span class="chip-cat">%s</span>'
-            '<button class="save-heart">%s</button>'
+            '<button class="save-heart" data-save-id="%s" data-save-title="%s" data-save-type="%s" '
+            'data-save-url="%s" data-save-meta="%s" data-save-color="%s">%s</button>'
             '<span class="emoji">%s</span></div>'
             '<div class="card-body"><h3>%s</h3>'
             '<div class="by">%s%s</div>'
@@ -378,13 +559,14 @@ def event_card(emoji, bg, cat, catcol, title, org, verified, date, place, going,
             '<div class="card-foot"><span class="stat">%s going</span>'
             '<button class="pill primary" data-rsvp="Going ✓" data-cal-title="%s" data-cal-date="%s" '
             'data-cal-time="%s" data-cal-place="%s" data-cal-color="%s">%s</button></div></div></div>'
-            % (freshers_attr, bg, cat, ICONS['heart'], emoji, title, org, v, ICONS['cal'], date, ICONS['pin'], place,
+            % (extra_attrs, bg, cat, save_id, title, cat, page_url, date + ' · ' + place, color, ICONS['heart'],
+               emoji, title, org, v, ICONS['cal'], date, ICONS['pin'], place,
                ticket_html, going, title, iso_date, cal_time, place, color, cta))
 
 def build_events():
     freshers_cards = [
         event_card('🎉','linear-gradient(135deg,var(--coral),var(--amber))','Freshers Week','', 'Move-In Day &amp; Welcome BBQ','Cardiff University',True,'Mon 21 Sep · 12pm','Halls of Residence','340','I\'m going','2026-09-21','var(--coral)', freshers=True),
-        event_card('🌍','linear-gradient(135deg,var(--sky),var(--amber))','Freshers Week','', 'International Students Welcome Social','International Students',True,'Tue 22 Sep · 5pm','Y Plas','210','I\'m going','2026-09-22','var(--sky)', freshers=True),
+        event_card('🌍','linear-gradient(135deg,var(--sky),var(--amber))','Freshers Week','', 'International Students Welcome Social','Cardiff SU',True,'Tue 22 Sep · 5pm','Y Plas','210','I\'m going','2026-09-22','var(--sky)', freshers=True),
         event_card('🏃','linear-gradient(135deg,var(--lime),var(--sky))','Freshers Week','', 'Give It A Go: Try a Sport','Athletic Union',True,'Thu 24 Sep · 1pm','Sports Fields, Llanrumney','185','I\'m going','2026-09-24','var(--lime)', freshers=True),
         event_card('🎪','linear-gradient(135deg,var(--amber),var(--coral))','Freshers Week','', 'Freshers Fair','Cardiff SU',True,'Mon 28 Sep · 10am','Y Plas &amp; SU','1.2k','I\'m going','2026-09-28','var(--amber)', freshers=True),
         event_card('🪩','linear-gradient(135deg,var(--sky),var(--lime))','Freshers Week','', 'YOLO: Freshers Special','Cardiff SU',True,'Wed 30 Sep · 9pm','Y Plas','420','I\'m going','2026-09-30','var(--sky)', freshers=True,
@@ -394,7 +576,7 @@ def build_events():
     cards = [
         event_card('🎮','linear-gradient(135deg,var(--coral),var(--amber))','Social','', 'Games Night + Pizza','Computer Science Society',True,'Thu 2 Oct · 7pm','SU, Y Plas','84','I\'m going','2026-10-02','var(--coral)'),
         event_card('🎤','linear-gradient(135deg,var(--sky),var(--lime))','Social','', 'Open Mic Night','Music Society',True,'Fri 3 Oct · 8pm','The Taf','56','I\'m going','2026-10-03','var(--coral)'),
-        event_card('💼','linear-gradient(135deg,var(--amber),var(--coral))','Workshop','', 'CV Clinic + Networking','Enactus Cardiff',True,'Wed 8 Oct · 5:30pm','sbarc | spark','40','Reserve','2026-10-08','var(--amber)'),
+        event_card('💼','linear-gradient(135deg,var(--amber),var(--coral))','Workshop','', 'CV Clinic + Networking','Enactus Cardiff',True,'Wed 8 Oct · 5:30pm','sbarc | spark','40','Reserve','2026-10-08','var(--amber)', extra_cat='Professional'),
         event_card('🧗','linear-gradient(135deg,var(--lime),var(--sky))','Sport','', 'Give It A Go: Bouldering','Mountaineering Club',True,'Sat 11 Oct · 2pm','Boulders CDF','22','I\'m going','2026-10-11','var(--lime)'),
         event_card('🎬','linear-gradient(135deg,var(--coral),var(--sky))','Social','', 'Film Night: Cult Classics','Film Society',True,'Sun 12 Oct · 6pm','SU Cinema','70','I\'m going','2026-10-12','var(--coral)'),
         event_card('🌍','linear-gradient(135deg,var(--sky),var(--amber))','Talk','', 'Careers in Sustainability','Careers Service',True,'Tue 14 Oct · 1pm','Glamorgan Building','35','Reserve','2026-10-14','var(--sky)'),
@@ -406,9 +588,11 @@ def build_events():
             'Filter by what you\'re into — all hosted by verified organisations.</div></div>'
             '<div class="chips" data-filter-grid="eventsGrid"><div class="chip on">All</div>'
             '<div class="chip freshers-chip">🎉 Freshers Week</div>'
-            '<div class="chip">Social</div>'
-            '<div class="chip">Professional</div><div class="chip">Sport</div><div class="chip">Talks</div>'
-            '<div class="chip">This week</div><div class="chip">Free</div></div>'
+            '<div class="chip" data-cat="Social">Social</div>'
+            '<div class="chip" data-cat="Professional">Professional</div>'
+            '<div class="chip" data-cat="Sport">Sport</div>'
+            '<div class="chip" data-cat="Talk">Talks</div>'
+            '<div class="chip" data-free="1">Free</div></div>'
             '<div class="grid g3" id="eventsGrid">%s</div></div>' % ''.join(freshers_cards + cards))
     return page('Events', 'events', body)
 
@@ -420,32 +604,33 @@ def build_bucs():
                     'Cardiff vs Hartpury', 'Round 1 · Home · BUCS Super Rugby', True,
                     'Wed 23 Sep · 2pm', 'Cardiff University Sports Fields, Llanrumney', '54', 'I\'m going',
                     '2026-09-23', 'var(--coral)',
-                    'https://www.bucs.org.uk/tickets.html', 'BUCS tickets'),
+                    'https://www.bucs.org.uk/tickets.html', 'BUCS tickets', page_url='bucs.html', venue='Home'),
         event_card('🏉', 'linear-gradient(135deg,var(--sky),var(--lime))', 'Rugby', '',
                     'Durham vs Cardiff', 'Round 2 · Away · BUCS Super Rugby', True,
                     'Wed 30 Sep · 2pm', 'Durham', '11', 'I\'m going',
                     '2026-09-30', 'var(--coral)',
-                    'https://www.bucs.org.uk/tickets.html', 'BUCS tickets'),
+                    'https://www.bucs.org.uk/tickets.html', 'BUCS tickets', page_url='bucs.html', venue='Away'),
         event_card('🏆', 'linear-gradient(135deg,var(--amber),var(--coral))', 'Derby', '',
                     'Cardiff vs Cardiff Met', 'Round 3 · Home · The Cardiff Clash', True,
                     'Wed 7 Oct · 7:30pm', 'Cardiff Arms Park', '340', 'I\'m going',
                     '2026-10-07', 'var(--coral)',
-                    'https://www.bucs.org.uk/tickets.html', 'The Cardiff Clash — get tickets'),
+                    'https://www.bucs.org.uk/tickets.html', 'The Cardiff Clash — get tickets', page_url='bucs.html',
+                    venue='Home', extra_cat='Rugby'),
         event_card('🏉', 'linear-gradient(135deg,var(--lime),var(--sky))', 'Rugby', '',
                     'Brunel vs Cardiff', 'Round 4 · Away · BUCS Super Rugby', True,
                     'Wed 14 Oct · 2pm', 'Brunel', '9', 'I\'m going',
                     '2026-10-14', 'var(--coral)',
-                    'https://www.bucs.org.uk/tickets.html', 'BUCS tickets'),
+                    'https://www.bucs.org.uk/tickets.html', 'BUCS tickets', page_url='bucs.html', venue='Away'),
         event_card('🏉', 'linear-gradient(135deg,var(--coral),var(--sky))', 'Rugby', '',
                     'Cardiff vs Nottingham', 'Round 5 · Home · BUCS Super Rugby', True,
                     'Wed 28 Oct · 2pm', 'Cardiff University Sports Fields, Llanrumney', '61', 'I\'m going',
                     '2026-10-28', 'var(--coral)',
-                    'https://www.bucs.org.uk/tickets.html', 'BUCS tickets'),
+                    'https://www.bucs.org.uk/tickets.html', 'BUCS tickets', page_url='bucs.html', venue='Home'),
         event_card('🏉', 'linear-gradient(135deg,var(--sky),var(--amber))', 'Rugby', '',
                     'Exeter vs Cardiff', 'Round 6 · Away · BUCS Super Rugby', True,
                     'Wed 4 Nov · 2pm', 'Exeter', '14', 'I\'m going',
                     '2026-11-04', 'var(--coral)',
-                    'https://www.bucs.org.uk/tickets.html', 'BUCS tickets'),
+                    'https://www.bucs.org.uk/tickets.html', 'BUCS tickets', page_url='bucs.html', venue='Away'),
     ]
     body = ('<div class="content">'
             '<div class="page-head"><div class="ey mono-eyebrow">Cardiff University sport</div>'
@@ -455,8 +640,10 @@ def build_bucs():
             'Men\'s BUCS Super Rugby; see the '
             '<a href="https://www.cardiffstudents.com/activities/au/bucs-fixtures/" target="_blank" rel="noopener" '
             'style="color:var(--lime);font-weight:700">Athletic Union\'s full fixture list ↗</a> for all 34 sports clubs.</div></div>'
-            '<div class="chips"><div class="chip on">All</div><div class="chip">Home</div>'
-            '<div class="chip">Away</div><div class="chip">Rugby</div></div>'
+            '<div class="chips"><div class="chip on">All</div>'
+            '<div class="chip" data-venue="Home">Home</div>'
+            '<div class="chip" data-venue="Away">Away</div>'
+            '<div class="chip" data-cat="Rugby">Rugby</div></div>'
             '<div class="grid g3">%s</div></div>' % ''.join(fixtures))
     return page('BUCS', 'bucs', body)
 
@@ -464,16 +651,20 @@ def build_bucs():
 def opp_row(logo, bg, role, kind, org, verified, tags, closes):
     v = VERIFY if verified else ''
     tagbits = ''.join('<div class="bit">%s</div>' % t for t in tags)
-    return ('<article class="post"><span class="accent-edge" style="background:var(--sky)"></span>'
+    save_id = 'opportunity:' + role
+    return ('<article class="post" data-cat="%s"><span class="accent-edge" style="background:var(--sky)"></span>'
             '<div class="post-top"><div class="post-ava" style="background:%s">%s</div>'
             '<div class="post-meta"><div class="org">%s%s</div>'
             '<div class="time">%s · links out to employer</div></div>'
             '<span class="post-cat" style="background:color-mix(in srgb,var(--sky) 16%%,transparent);color:var(--sky)">%s</span></div>'
             '<h3>%s</h3><div class="post-info">%s</div>'
-            '<div class="post-foot"><div class="react"><span>🔖 Save</span><span>↗ Share</span></div>'
+            '<div class="post-foot"><div class="react"><span class="save-toggle" data-save-id="%s" '
+            'data-save-title="%s" data-save-type="Opportunity" data-save-url="opportunities.html" '
+            'data-save-meta="%s" data-save-color="var(--sky)" data-saved-label="🔖 Saved ✓">🔖 Save</span>'
+            '<span>↗ Share</span></div>'
             '<div class="post-actions"><button class="pill">Details</button>'
             '<button class="pill primary">Apply on site %s</button></div></div></article>'
-            % (bg, logo, org, v, closes, kind, role, tagbits, ICONS['ext']))
+            % (kind, bg, logo, org, v, closes, kind, role, tagbits, save_id, role, org + ' · ' + closes, ICONS['ext']))
 
 def build_opps():
     rows = [
@@ -490,24 +681,29 @@ def build_opps():
             '<div class="page-head"><div class="ey mono-eyebrow">Don\'t miss out</div>'
             '<h1>Opportunities</h1>'
             '<div class="sub">Internships, placements, grad schemes and part-time work — pulled together from Cardiff Careers and partner employers. Every listing links straight back to the source to apply.</div></div>'
-            '<div class="chips"><div class="chip on">All</div><div class="chip">Internships</div>'
-            '<div class="chip">Placements</div><div class="chip">Graduate</div><div class="chip">Part-time</div>'
-            '<div class="chip">Volunteering</div></div>'
+            '<div class="chips"><div class="chip on">All</div>'
+            '<div class="chip" data-cat="Internship">Internships</div>'
+            '<div class="chip" data-cat="Placement">Placements</div>'
+            '<div class="chip" data-cat="Graduate">Graduate</div>'
+            '<div class="chip" data-cat="Part-time">Part-time</div>'
+            '<div class="chip" data-cat="Volunteering">Volunteering</div></div>'
             '<div class="feed">%s</div></div>' % ''.join(rows))
     return page('Opportunities', 'opps', body)
 
 # ================= PAGE: DISCOUNTS =================
 def deal_card(emoji, bg, cat, name, place, desc, pct, cta):
-    return ('<div class="card"><div class="card-media" style="background:%s">'
+    save_id = 'discount:' + name
+    return ('<div class="card" data-cat="%s"><div class="card-media" style="background:%s">'
             '<span class="chip-cat">%s</span>'
-            '<button class="save-heart">%s</button>'
+            '<button class="save-heart" data-save-id="%s" data-save-title="%s" data-save-type="Discount" '
+            'data-save-url="discounts.html" data-save-meta="%s" data-save-color="var(--lime)">%s</button>'
             '<span class="emoji">%s</span><span class="deal-tag">%s</span></div>'
             '<div class="card-body"><h3>%s</h3>'
             '<div class="by">%s · Uni-Verse partner</div>'
             '<p>%s</p>'
             '<div class="card-foot"><span class="stat">Show your card</span>'
             '<button class="pill primary">%s</button></div></div></div>'
-            % (bg, cat, ICONS['heart'], emoji, pct, name, place, desc, cta))
+            % (cat, bg, cat, save_id, name, place + ' · ' + pct, ICONS['heart'], emoji, pct, name, place, desc, cta))
 
 def build_discounts():
     cards = [
@@ -522,9 +718,12 @@ def build_discounts():
             '<div class="page-head"><div class="ey mono-eyebrow">Your card, your savings</div>'
             '<h1>Student discounts</h1>'
             '<div class="sub">Deals from local Cardiff businesses, free with your Uni-Verse account. Show your card in-store or grab a code.</div></div>'
-            '<div class="chips"><div class="chip on">All</div><div class="chip">Food &amp; Drink</div>'
-            '<div class="chip">Fitness</div><div class="chip">Grooming</div><div class="chip">Study</div>'
-            '<div class="chip">Nights out</div></div>'
+            '<div class="chips"><div class="chip on">All</div>'
+            '<div class="chip" data-cat="Food &amp; Drink">Food &amp; Drink</div>'
+            '<div class="chip" data-cat="Fitness">Fitness</div>'
+            '<div class="chip" data-cat="Grooming">Grooming</div>'
+            '<div class="chip" data-cat="Study">Study</div>'
+            '<div class="chip" data-cat="Nights out">Nights out</div></div>'
             '<div class="grid g3">%s</div></div>' % ''.join(cards))
     return page('Discounts', 'discounts', body)
 
@@ -543,29 +742,27 @@ def soc_card(emoji, bg, name, members, desc, slug):
             '</div></div></div></div>'
             % (bg, emoji, name, VERIFY, members, desc, SU_SOCIETIES_URL, ICONS['ext'], slug, slug, ICONS['arrow']))
 
+def your_societies_widget():
+    return ('<div class="widget"><div class="widget-head"><h3>Your Societies</h3></div>'
+            '<div class="your-soc-list" id="yourSocList"></div></div>')
+
 def build_societies():
     cards = [
         soc_card('🎬','linear-gradient(135deg,var(--lime),var(--sky))','Film Society','1,240','Weekly screenings, cult classics and trips to the cinema. All welcome.','film'),
-        soc_card('🥾','linear-gradient(135deg,var(--coral),var(--amber))','Hiking & Mountaineering','860','Weekend adventures across the Brecon Beacons and beyond. Kit provided.','hiking'),
-        soc_card('💼','linear-gradient(135deg,var(--sky),var(--lime))','Entrepreneurs Society','1,510','Talks, pitch nights and startup socials. Build something at uni.','entrepreneurs'),
-        soc_card('🎭','linear-gradient(135deg,var(--amber),var(--coral))','Drama Society','740','Termly productions, workshops and open auditions. No experience needed.','drama'),
-        soc_card('⚽','linear-gradient(135deg,var(--lime),var(--coral))','Football Club','2,100','Teams for every level plus casual kickabouts. Give it a go.','football'),
-        soc_card('🌍','linear-gradient(135deg,var(--sky),var(--amber))','International Students','1,880','Socials, trips and a friendly community away from home.','international'),
         soc_card('🏐','linear-gradient(135deg,var(--sky),var(--lime))','Netball Club','980','BUCS netball across every level, from social to competitive.','netball'),
         soc_card('🎸','linear-gradient(135deg,var(--coral),var(--sky))','Music Society','690','Open mic nights, jam sessions and a termly showcase gig.','music'),
-        soc_card('🎙️','linear-gradient(135deg,var(--amber),var(--sky))','Debate Society','410','Weekly debates, national competitions and public speaking practice.','debate'),
-        soc_card('🎗️','linear-gradient(135deg,var(--lime),var(--amber))','RAG Society','560','Fundraising challenges and charity events all year round.','rag'),
         soc_card('📷','linear-gradient(135deg,var(--sky),var(--coral))','Photography Society','730','Shoots around Cardiff, darkroom access and a termly exhibition.','photography'),
-        soc_card('🏳️‍🌈','linear-gradient(135deg,var(--coral),var(--lime))','Pride Society','890','A safe, social space for LGBTQ+ students and allies.','pride'),
     ]
+    left = ('<div class="feed-col">'
+            '<div class="page-subhead"><h2>Join Societies</h2></div>'
+            '<div class="grid g3">%s</div>'
+            '%s</div>' % (''.join(cards), build_soc_directory()))
+    right = '<aside class="side-col">%s</aside>' % your_societies_widget()
     body = ('<div class="content">'
             '<div class="page-head"><div class="ey mono-eyebrow">Find your people</div>'
             '<h1>Societies</h1>'
-            '<div class="sub">300+ Cardiff societies, all in one place. Join in a tap here, or head to the Students\' Union — the official place to join — for membership and the Guild of Societies. Hit "Join" and once the committee accepts you, you\'re into the society\'s own space — chat, events, timetable and kit.</div></div>'
-            '<div class="chips"><div class="chip on">All</div><div class="chip">Sport</div>'
-            '<div class="chip">Arts</div><div class="chip">Academic</div><div class="chip">Culture</div>'
-            '<div class="chip">Volunteering</div><div class="chip">Social</div></div>'
-            '<div class="grid g3">%s</div></div>' % ''.join(cards))
+            '<div class="sub">These four have their own full space on Uni-Verse — chat, events, timetable and kit. Every other real Cardiff SU society and Athletic Union sports club is browsable and joinable further down. Head to the Students\' Union — the official place to join — for membership and the Guild of Societies.</div></div>'
+            '<div class="two-col">%s%s</div></div>' % (left, right))
     return page('Societies', 'societies', body)
 
 # ---------------- society detail page (chat, events, timetable, kit) ----------------
@@ -631,91 +828,6 @@ SOCIETY_PAGES = {
          tt_row('MONTHLY', 'Committee open meeting', 'First Sunday · Common Room, SU')],
         'Film Society hoodie & tote'),
 
-    'society-hiking.html': build_society_page(
-        'hiking', 'Hiking & Mountaineering', '🥾', 'linear-gradient(135deg,var(--coral),var(--amber))', '860',
-        'Weekend adventures across the Brecon Beacons and beyond.',
-        [society_chat_msg('RH', 'linear-gradient(135deg,var(--lime),var(--sky))', 'Rhys',
-                           "Weather looks decent for Sunday's Brecon walk ⛰️", '3h ago'),
-         society_chat_msg('BC', 'linear-gradient(135deg,var(--coral),var(--sky))', 'Beca',
-                           'Kit check — anyone need to borrow boots?', '1h ago'),
-         society_chat_msg('OW', 'linear-gradient(135deg,var(--amber),var(--lime))', 'Owen',
-                           'Car share sign-up sheet is in the group doc, fill it in pls', '20m ago')],
-        [society_event_row('10', 'Oct', 'Weekend Hike: Brecon Beacons', 'Sat · 8:00am meet · SU forecourt', 'var(--lime)',
-                            '2026-10-10', '8:00am', 'SU forecourt'),
-         society_event_row('11', 'Oct', 'Give It A Go: Bouldering', 'Sun · 2:00pm · Boulders CDF', 'var(--sky)',
-                            '2026-10-11', '2:00pm', 'Boulders CDF')],
-        [tt_row('WEEKLY', 'Kit & trip planning', 'Tuesdays · 6:00pm · Committee Room'),
-         tt_row('FORTNIGHTLY', 'Day hike (location varies)', 'Sundays · meet SU forecourt')],
-        'Hiking & Mountaineering fleece & buff'),
-
-    'society-entrepreneurs.html': build_society_page(
-        'entrepreneurs', 'Entrepreneurs Society', '💼', 'linear-gradient(135deg,var(--sky),var(--lime))', '1,510',
-        'Talks, pitch nights and startup socials.',
-        [society_chat_msg('PR', 'linear-gradient(135deg,var(--coral),var(--amber))', 'Priya',
-                           'Pitch night applications close Friday, get yours in!', '4h ago'),
-         society_chat_msg('CJ', 'linear-gradient(135deg,var(--sky),var(--lime))', 'Callum',
-                           'Guest speaker from a Cardiff startup this week, should be good', '2h ago'),
-         society_chat_msg('NW', 'linear-gradient(135deg,var(--amber),var(--coral))', 'Nia',
-                           'Anyone want to team up for the case study competition?', '45m ago')],
-        [society_event_row('08', 'Oct', 'CV Clinic + Networking', 'Wed · 5:30pm · sbarc | spark', 'var(--amber)',
-                            '2026-10-08', '5:30pm', 'sbarc | spark'),
-         society_event_row('23', 'Oct', 'Pitch Night: Term 1 Final', 'Thu · 6:30pm · sbarc | spark', 'var(--sky)',
-                            '2026-10-23', '6:30pm', 'sbarc | spark')],
-        [tt_row('WEEKLY', 'Speaker series', 'Wednesdays · 6:00pm · sbarc | spark'),
-         tt_row('MONTHLY', 'Pitch practice', 'Last Friday · Business School')],
-        'Entrepreneurs Society hoodie'),
-
-    'society-drama.html': build_society_page(
-        'drama', 'Drama Society', '🎭', 'linear-gradient(135deg,var(--amber),var(--coral))', '740',
-        'Termly productions, workshops and open auditions.',
-        [society_chat_msg('FR', 'linear-gradient(135deg,var(--lime),var(--sky))', 'Freya',
-                           'Audition sign-ups open now for the winter show!', '5h ago'),
-         society_chat_msg('JB', 'linear-gradient(135deg,var(--coral),var(--sky))', 'Josh',
-                           'Rehearsal moved to Studio 2 tonight, same time', '2h ago'),
-         society_chat_msg('AK', 'linear-gradient(135deg,var(--amber),var(--lime))', 'Amelia',
-                           'Does anyone have a spare script copy going?', '18m ago')],
-        [society_event_row('06', 'Oct', 'Open Auditions: Winter Production', 'Mon · 6:00pm · Bute Studio 2', 'var(--coral)',
-                            '2026-10-06', '6:00pm', 'Bute Studio 2'),
-         society_event_row('15', 'Oct', 'Improv Workshop', 'Wed · 7:00pm · Bute Studio 1', 'var(--amber)',
-                            '2026-10-15', '7:00pm', 'Bute Studio 1')],
-        [tt_row('WEEKLY', 'Rehearsals', 'Mondays · 6:00pm · Bute Building, Studio 2'),
-         tt_row('WEEKLY', 'Improv & games night', 'Wednesdays · 7:00pm · Studio 1')],
-        'Drama Society tee'),
-
-    'society-football.html': build_society_page(
-        'football', 'Football Club', '⚽', 'linear-gradient(135deg,var(--lime),var(--coral))', '2,100',
-        'Teams for every level plus casual kickabouts.',
-        [society_chat_msg('LM', 'linear-gradient(135deg,var(--coral),var(--amber))', 'Liam',
-                           "Match report from Saturday's win up on the group now 🔥", '6h ago'),
-         society_chat_msg('FF', 'linear-gradient(135deg,var(--sky),var(--lime))', 'Ffion',
-                           'Training moved indoors this week — sports hall', '3h ago'),
-         society_chat_msg('CH', 'linear-gradient(135deg,var(--amber),var(--coral))', 'Charlie',
-                           "Who's in for Wednesday's fixture?", '40m ago')],
-        [society_event_row('07', 'Oct', 'BUCS Football: Cardiff vs Bristol', 'Wed · 2:00pm · Sports Fields, Llanrumney', 'var(--lime)',
-                            '2026-10-07', '2:00pm', 'Sports Fields, Llanrumney'),
-         society_event_row('11', 'Oct', 'Casual Kickabout', 'Sun · 3:00pm · Talybont Playing Fields', 'var(--sky)',
-                            '2026-10-11', '3:00pm', 'Talybont Playing Fields')],
-        [tt_row('WEEKLY', 'Training', 'Tuesdays & Thursdays · 7:00pm · Sports Fields, Llanrumney'),
-         tt_row('WEEKLY', 'Matchday (BUCS)', 'Saturdays · venue varies')],
-        'Football Club home & away kit'),
-
-    'society-international.html': build_society_page(
-        'international', 'International Students', '🌍', 'linear-gradient(135deg,var(--sky),var(--amber))', '1,880',
-        'Socials, trips and a friendly community away from home.',
-        [society_chat_msg('YK', 'linear-gradient(135deg,var(--coral),var(--lime))', 'Yuki',
-                           'Potluck dinner this Friday, bring a dish from home!', '4h ago'),
-         society_chat_msg('MR', 'linear-gradient(135deg,var(--sky),var(--amber))', 'Marco',
-                           'Anyone going on the Bath day trip next month?', '1h ago'),
-         society_chat_msg('LY', 'linear-gradient(135deg,var(--amber),var(--sky))', 'Layla',
-                           'Coffee morning tomorrow 10am, all welcome ☕', '25m ago')],
-        [society_event_row('10', 'Oct', 'Welcome Potluck Dinner', 'Fri · 6:00pm · Y Plas', 'var(--coral)',
-                            '2026-10-10', '6:00pm', 'Y Plas'),
-         society_event_row('18', 'Oct', 'Day Trip: Bath', 'Sat · 9:00am meet · SU forecourt', 'var(--sky)',
-                            '2026-10-18', '9:00am', 'SU forecourt')],
-        [tt_row('WEEKLY', 'Coffee morning', 'Wednesdays · 10:00am · SU Café'),
-         tt_row('MONTHLY', 'Potluck social', 'First Friday · Y Plas')],
-        'International Students Society scarf'),
-
     'society-netball.html': build_society_page(
         'netball', 'Netball Club', '🏐', 'linear-gradient(135deg,var(--sky),var(--lime))', '980',
         'BUCS netball across every level, from social to competitive.',
@@ -750,40 +862,6 @@ SOCIETY_PAGES = {
          tt_row('TERMLY', 'Showcase gig', 'Last Friday of term · Y Plas')],
         'Music Society tee & tote'),
 
-    'society-debate.html': build_society_page(
-        'debate', 'Debate Society', '🎙️', 'linear-gradient(135deg,var(--amber),var(--sky))', '410',
-        'Weekly debates, national competitions and public speaking practice.',
-        [society_chat_msg('ZR', 'linear-gradient(135deg,var(--coral),var(--amber))', 'Zara',
-                           "This week's motion: 'This House Would Abolish Exams' 👀", '4h ago'),
-         society_chat_msg('BN', 'linear-gradient(135deg,var(--sky),var(--lime))', 'Ben',
-                           'Novice training session was great, thanks for running it', '2h ago'),
-         society_chat_msg('IR', 'linear-gradient(135deg,var(--amber),var(--coral))', 'Iris',
-                           'Signed us up for the Cardiff Open, who\'s in?', '15m ago')],
-        [society_event_row('06', 'Oct', 'Weekly Debate Night', 'Tue · 7:00pm · Committee Room, SU', 'var(--amber)',
-                            '2026-10-06', '7:00pm', 'Committee Room, SU'),
-         society_event_row('20', 'Oct', 'Novice Training Workshop', 'Tue · 6:00pm · Committee Room, SU', 'var(--sky)',
-                            '2026-10-20', '6:00pm', 'Committee Room, SU')],
-        [tt_row('WEEKLY', 'Debate night', 'Tuesdays · 7:00pm · Committee Room, SU'),
-         tt_row('MONTHLY', 'Novice training', 'First Tuesday · Committee Room, SU')],
-        'Debate Society pin & tote'),
-
-    'society-rag.html': build_society_page(
-        'rag', 'RAG Society', '🎗️', 'linear-gradient(135deg,var(--lime),var(--amber))', '560',
-        'Fundraising challenges and charity events all year round.',
-        [society_chat_msg('HL', 'linear-gradient(135deg,var(--coral),var(--lime))', 'Holly',
-                           'Skydive sign-ups close Friday — last few spots!', '3h ago'),
-         society_chat_msg('FN', 'linear-gradient(135deg,var(--amber),var(--sky))', 'Fin',
-                           'Bake sale raised £340 today, amazing work everyone 🎉', '1h ago'),
-         society_chat_msg('ZO', 'linear-gradient(135deg,var(--sky),var(--coral))', 'Zoe',
-                           'Can someone cover the collection bucket Saturday morning?', '25m ago')],
-        [society_event_row('14', 'Oct', 'Charity Bake Sale', 'Wed · 11:00am · SU Concourse', 'var(--lime)',
-                            '2026-10-14', '11:00am', 'SU Concourse'),
-         society_event_row('24', 'Oct', 'RAG Skydive Challenge', 'Sat · 9:00am · Airfield, Swansea', 'var(--amber)',
-                            '2026-10-24', '9:00am', 'Airfield, Swansea')],
-        [tt_row('WEEKLY', 'Committee meeting', 'Thursdays · 6:00pm · Committee Room, SU'),
-         tt_row('MONTHLY', 'Big fundraiser', 'Last Saturday · venue varies')],
-        'RAG Society charity tee'),
-
     'society-photography.html': build_society_page(
         'photography', 'Photography Society', '📷', 'linear-gradient(135deg,var(--sky),var(--coral))', '730',
         'Shoots around Cardiff, darkroom access and a termly exhibition.',
@@ -800,30 +878,21 @@ SOCIETY_PAGES = {
         [tt_row('WEEKLY', 'Darkroom access', 'Tuesdays · Bute Building'),
          tt_row('MONTHLY', 'Society shoot', 'First Friday · location varies')],
         'Photography Society tote & lens cloth'),
-
-    'society-pride.html': build_society_page(
-        'pride', 'Pride Society', '🏳️‍🌈', 'linear-gradient(135deg,var(--coral),var(--lime))', '890',
-        'A safe, social space for LGBTQ+ students and allies.',
-        [society_chat_msg('RO', 'linear-gradient(135deg,var(--coral),var(--amber))', 'Robin',
-                           'Coffee & chat this week is at the usual spot, 2pm', '3h ago'),
-         society_chat_msg('SA', 'linear-gradient(135deg,var(--sky),var(--lime))', 'Sasha',
-                           'Pride Ball tickets go on sale Monday, mark your calendars!', '1h ago'),
-         society_chat_msg('JM', 'linear-gradient(135deg,var(--lime),var(--coral))', 'Jamie',
-                           'New badges just arrived, come grab one at the social', '15m ago')],
-        [society_event_row('14', 'Oct', 'Coffee & Chat', 'Wed · 2:00pm · SU Café', 'var(--coral)',
-                            '2026-10-14', '2:00pm', 'SU Café'),
-         society_event_row('21', 'Nov', 'Pride Ball', 'Fri · 7:00pm · Great Hall', 'var(--lime)',
-                            '2026-11-21', '7:00pm', 'Great Hall')],
-        [tt_row('WEEKLY', 'Coffee & chat', 'Wednesdays · 2:00pm · SU Café'),
-         tt_row('MONTHLY', 'Social night', 'Third Friday · Y Plas')],
-        'Pride Society badge & flag'),
 }
 
 # ================= PAGE: FLATMATES =================
+def _price_num(price):
+    m = re.search(r'\d+', price)
+    return int(m.group()) if m else 0
+
 def flat_card(emoji, bg, area, title, poster, desc, price, available, spots, key):
-    return ('<div class="card"><div class="card-media" style="background:%s">'
+    save_id = 'flatmate:' + key
+    save_title = area + ' — ' + title
+    save_meta = price + ' pcm · Available ' + available
+    return ('<div class="card" data-cat="%s" data-price="%s"><div class="card-media" style="background:%s">'
             '<span class="chip-cat">%s</span>'
-            '<button class="save-heart">%s</button>'
+            '<button class="save-heart" data-save-id="%s" data-save-title="%s" data-save-type="Flatmate" '
+            'data-save-url="flatmates.html" data-save-meta="%s" data-save-color="var(--sky)">%s</button>'
             '<span class="emoji">%s</span></div>'
             '<div class="card-body"><h3>%s</h3>'
             '<div class="by">%s</div>'
@@ -831,8 +900,8 @@ def flat_card(emoji, bg, area, title, poster, desc, price, available, spots, key
             '<div class="card-info"><div class="bit">%s %s pcm</div><div class="bit">%s Available %s</div></div>'
             '<div class="card-foot"><span class="stat">%s</span>'
             '<button class="pill primary" data-rsvp="Message sent ✓" data-rsvp-key="flatmate-%s">Message</button></div></div></div>'
-            % (bg, area, ICONS['heart'], emoji, title, poster, desc, ICONS['money'], price, ICONS['cal'],
-               available, spots, key))
+            % (area, _price_num(price), bg, area, save_id, save_title, save_meta, ICONS['heart'], emoji, title, poster, desc, ICONS['money'],
+               price, ICONS['cal'], available, spots, key))
 
 def build_flatmates():
     post_cta = ('<div class="widget" style="display:flex;align-items:center;justify-content:space-between;'
@@ -871,11 +940,16 @@ def build_flatmates():
             '<h1>Find a housemate</h1>'
             '<div class="sub">Second and third years with a spare room, posted by the students who live there — not an agency, no fees. '
             'Browse what\'s going, or list your own room.</div></div>'
-            '<div class="chips"><div class="chip on">All</div><div class="chip">Cathays</div>'
-            '<div class="chip">Roath</div><div class="chip">Heath</div><div class="chip">Gabalfa</div>'
-            '<div class="chip">Canton</div><div class="chip">Cardiff Bay</div><div class="chip">Under £450</div></div>'
+            '<div class="chips" data-filter-grid="flatGrid"><div class="chip on">All</div>'
+            '<div class="chip" data-cat="Cathays">Cathays</div>'
+            '<div class="chip" data-cat="Roath">Roath</div>'
+            '<div class="chip" data-cat="Heath">Heath</div>'
+            '<div class="chip" data-cat="Gabalfa">Gabalfa</div>'
+            '<div class="chip" data-cat="Canton">Canton</div>'
+            '<div class="chip" data-cat="Cardiff Bay">Cardiff Bay</div>'
+            '<div class="chip" data-maxprice="450">Under £450</div></div>'
             '%s'
-            '<div class="grid g3">%s</div></div>' % (post_cta, ''.join(cards)))
+            '<div class="grid g3" id="flatGrid">%s</div></div>' % (post_cta, ''.join(cards)))
     return page('Find a housemate', 'flatmates', body)
 
 # ================= PAGE: MESSAGES =================
@@ -922,6 +996,21 @@ def build_messages():
             '<button id="msgConvSend">%s</button></div>'
             '</div></div></div></div>' % (''.join(threads), ICONS['send']))
     return page('Messages', 'profile', body)
+
+# ================= PAGE: SAVED =================
+def build_saved():
+    body = ('<div class="content">'
+            '<div class="page-head"><div class="ey mono-eyebrow">Your list</div>'
+            '<h1>Saved</h1>'
+            '<div class="sub">Everything you\'ve saved across Uni-Verse — events, discounts, opportunities and rooms — in one place.</div></div>'
+            '<div class="widget"><div class="saved-list" id="savedList"></div></div>'
+            '</div>')
+    return page('Saved', 'profile', body)
+
+def saved_preview_widget():
+    return ('<div class="widget"><div class="widget-head"><h3>Saved</h3>'
+            '<a href="saved.html">View all →</a></div>'
+            '<div class="saved-list" id="savedPreviewList" data-preview="1"></div></div>')
 
 # ================= PAGE: SAFETY =================
 def contact_row(icon, name, detail, desc):
@@ -1073,7 +1162,11 @@ def build_map():
             '<div class="page-head"><div class="ey mono-eyebrow">Night out sorted</div>'
             '<h1>Clubs, bars, the SU &amp; BUCS near campus</h1>'
             '<div class="sub">Every club, bar, Students\' Union night and BUCS fixture students actually go to, pinned on the map — kept current, closed venues removed. Search to find one, tap a card to fly to it, or a pin to say you\'re going.</div></div>'
-            '<div class="chips"><div class="chip on">All</div><div class="chip">Student Union</div><div class="chip">Clubs</div><div class="chip">Bars</div><div class="chip">BUCS</div></div>'
+            '<div class="chips" id="mapChips"><div class="chip on">All</div>'
+            '<div class="chip" data-cat="Student Union">Student Union</div>'
+            '<div class="chip" data-cat="Club">Clubs</div>'
+            '<div class="chip" data-cat="Bar">Bars</div>'
+            '<div class="chip" data-cat="BUCS">BUCS</div></div>'
             '%s'
             '<div class="widget map-widget"><div id="venueMap"></div></div>'
             '%s%s'
@@ -1147,7 +1240,8 @@ def build_profile():
             '<div class="page-head" style="display:flex;align-items:center;gap:16px">'
             '<div class="rail-avatar" style="width:64px;height:64px;font-size:1.4rem;border-radius:18px">FW</div>'
             '<div><h1 style="margin-bottom:4px">Findlay Wyatt</h1>'
-            '<div class="sub">1st year · Computer Science · Cardiff University</div></div></div>'
+            '<div class="sub">1st year · Computer Science · Cardiff University</div></div>'
+            '<button class="pill" id="logoutBtn" type="button" style="margin-left:auto">Log out</button></div>'
             + stat_strip +
             '<div class="widget"><div class="widget-head"><h3>Your uni journey</h3>'
             '<span class="mono-eyebrow">3 of 6 done</span></div>'
@@ -1159,7 +1253,8 @@ def build_profile():
             '<div class="prog-txt"><div class="lbl">Building momentum 🚀</div>'
             '<div class="dsc">Every goal you tick is a thing you won\'t look back and wish you\'d done.</div></div></div>'
             '<div class="prog-steps">%s</div></div></div>' % ''.join(grows))
-    right = ('<aside class="side-col">%s%s%s</aside>' % (messages_preview_widget(), sidebar_ai(), sidebar_week()))
+    right = ('<aside class="side-col">%s%s%s%s</aside>'
+             % (messages_preview_widget(), saved_preview_widget(), sidebar_ai(), sidebar_week()))
     body = ('<div class="content"><div class="two-col">%s%s</div>%s</div>'
             % (left, right, calendar_widget()))
     return page('Your journey', 'profile', body)
@@ -1196,6 +1291,54 @@ def build_ai():
             '</div></div>' % (ICONS['spark'], recs, ICONS['send']))
     return page('Ask Uni-Verse AI', 'ai', body, chat=True)
 
+# ================= PAGE: LOGIN / SIGN UP =================
+def build_login():
+    body = ('<div class="landing login-page">'
+            '<nav class="land-nav"><a href="landing.html" class="name">Uni<span>-</span>Verse</a>'
+            '<div class="land-nav-links"><a href="landing.html">About</a>'
+            '<a href="feed.html" class="btn-sm" style="color:var(--lime);font-weight:800">Open app →</a></div></nav>'
+            '<div class="auth-wrap">'
+            '<div class="auth-card">'
+            '<div class="ey mono-eyebrow">Students only</div>'
+            '<h2 id="authTitle">Welcome back</h2>'
+            '<div class="as" id="authSub">Log in with your Cardiff student email</div>'
+            '<div class="auth-tabs">'
+            '<button type="button" class="auth-tab active" data-tab="login">Log in</button>'
+            '<button type="button" class="auth-tab" data-tab="signup">Sign up</button>'
+            '</div>'
+            '<form id="loginForm" class="auth-form" novalidate>'
+            '<div class="field"><label>Cardiff student email</label>'
+            '<input type="email" name="email" required placeholder="c1234567@cardiff.ac.uk"></div>'
+            '<div class="field"><label>Password</label>'
+            '<input type="password" name="password" required placeholder="Your password"></div>'
+            '<div class="field-error" id="loginError" hidden></div>'
+            '<button type="submit" class="btn-lg primary" style="width:100%;justify-content:center;margin-top:6px">Log in</button>'
+            '</form>'
+            '<form id="signupForm" class="auth-form" novalidate hidden>'
+            '<div class="field"><label>Full name</label>'
+            '<input type="text" name="name" required placeholder="e.g. Findlay Wyatt"></div>'
+            '<div class="field"><label>Username</label>'
+            '<input type="text" name="username" required placeholder="e.g. findlaywyatt"></div>'
+            '<div class="field"><label>Cardiff student email</label>'
+            '<input type="email" name="email" required placeholder="c1234567@cardiff.ac.uk"></div>'
+            '<div class="field"><label>Password</label>'
+            '<input type="password" name="password" required placeholder="Create a password"></div>'
+            '<div class="field"><label>Confirm password</label>'
+            '<input type="password" name="password2" required placeholder="Re-enter your password"></div>'
+            '<div class="field-error" id="signupError" hidden></div>'
+            '<button type="submit" class="btn-lg primary" style="width:100%;justify-content:center;margin-top:6px">Create account</button>'
+            '</form>'
+            '<div class="auth-note">Verified with your @cardiff.ac.uk email so the community stays students-only. This is a prototype — no real account is created; details are only ever stored in your browser.</div>'
+            '</div></div>'
+            + footer() + '</div>')
+    doc = ('<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">'
+           '<meta name="viewport" content="width=device-width, initial-scale=1.0">'
+           '<title>Log in · Uni-Verse Cardiff</title>%s'
+           '<link rel="stylesheet" href="css/styles.css"></head><body>'
+           '%s%s<script src="js/app.js"></script></body></html>'
+           % (FONTS, body, theme_switcher()))
+    return doc
+
 # ================= PAGE: LANDING =================
 def build_landing():
     val = lambda bg, ic, h, p: ('<div class="val"><div class="vic" style="background:%s">%s</div>'
@@ -1222,12 +1365,12 @@ def build_landing():
             '<nav class="land-nav"><div class="name">Uni<span>-</span>Verse</div>'
             '<div class="land-nav-links"><a href="#what">What is it</a><a href="events.html">Events</a>'
             '<a href="discounts.html">Discounts</a>'
-            '<a href="index.html" class="btn-sm" style="color:var(--lime);font-weight:800">Open app →</a></div></nav>'
+            '<a href="feed.html" class="btn-sm" style="color:var(--lime);font-weight:800">Open app →</a></div></nav>'
             '<div class="land-hero"><div class="hero-glow"></div><div class="hero-glow two"></div>'
             '<div class="hero-left"><div class="ey mono-eyebrow">Cardiff University · student platform</div>'
             '<h1>Everything at Cardiff, <span class="hl">in one place.</span></h1>'
             '<p class="lede">Every student we spoke to said the same thing: <em>"I wish I\'d known what was on."</em> Uni-Verse pulls all the events, societies, opportunities and discounts into one feed — so you never miss the uni you could\'ve had.</p>'
-            '<div class="hero-cta"><a href="index.html" class="btn-lg primary">Open the app @@ARROW@@</a>'
+            '<div class="hero-cta"><a href="feed.html" class="btn-lg primary">Open the app @@ARROW@@</a>'
             '<a href="#what" class="btn-lg ghost">See how it works</a></div>'
             '<div class="hero-proof">'
             '<div class="pf"><div class="n">300+</div><div class="l">Societies</div></div>'
@@ -1238,11 +1381,9 @@ def build_landing():
             '<h2>Four things, one login.</h2></div><div class="val-grid">@@VALUES@@</div></div>'
             '<div class="auth-wrap"><div class="auth-card"><div class="ey mono-eyebrow">Students only</div>'
             '<h2>Join Uni-Verse</h2><div class="as">Sign up with your Cardiff student email</div>'
-            '<div class="field"><label>Cardiff email</label><input type="email" placeholder="c1234567@cardiff.ac.uk"></div>'
-            '<div class="field"><label>Password</label><input type="password" placeholder="Create a password"></div>'
-            '<a href="index.html" class="btn-lg primary" style="width:100%;justify-content:center;margin-top:6px">Create account</a>'
+            '<a href="login.html#signup" class="btn-lg primary" style="width:100%;justify-content:center;margin-top:6px">Create account</a>'
             '<div class="divider">or</div>'
-            '<a href="index.html" class="btn-lg ghost" style="width:100%;justify-content:center">I already have an account</a>'
+            '<a href="login.html#login" class="btn-lg ghost" style="width:100%;justify-content:center">I already have an account</a>'
             '<div class="auth-note">Verified with your @cardiff.ac.uk email so the community stays students-only. This is a prototype — no real account is created.</div>'
             '</div></div>'
             + footer() + '</div>')
@@ -1260,7 +1401,11 @@ def build_landing():
 
 # ---------------- write all ----------------
 pages = {
-    'index.html': build_feed(),
+    # index.html is the site root (what a real host serves at "/") — the landing
+    # page, so a first-time visitor sees the pitch before signing in. The app
+    # itself (the old index.html) now lives at feed.html.
+    'index.html': build_landing(),
+    'feed.html': build_feed(),
     'events.html': build_events(),
     'bucs.html': build_bucs(),
     'opportunities.html': build_opps(),
@@ -1270,9 +1415,11 @@ pages = {
     'societies.html': build_societies(),
     'flatmates.html': build_flatmates(),
     'messages.html': build_messages(),
+    'saved.html': build_saved(),
     'profile.html': build_profile(),
     'ai.html': build_ai(),
     'landing.html': build_landing(),
+    'login.html': build_login(),
 }
 pages.update(SOCIETY_PAGES)
 for fn, html in pages.items():
@@ -1281,7 +1428,8 @@ for fn, html in pages.items():
     print('wrote', fn, len(html), 'bytes')
 
 # search index, consumed by the topbar search dropdown (js/app.js)
-search_js = 'var UV_SEARCH = ' + json.dumps(SEARCH_INDEX, ensure_ascii=False) + ';'
+search_js = ('var UV_SEARCH = ' + json.dumps(SEARCH_INDEX, ensure_ascii=False) + ';\n'
+             + 'var UV_THREADS = ' + json.dumps(NOTIF_THREADS, ensure_ascii=False) + ';')
 with open(os.path.join(OUT, 'js', 'search-data.js'), 'w', encoding='utf-8') as f:
     f.write(search_js)
 print('wrote js/search-data.js', len(search_js), 'bytes')

@@ -30,13 +30,51 @@
       saveCalendarItems(items);
     }
   }
+  function removeFromCalendar(id) {
+    saveCalendarItems(getCalendar().filter(function (i) { return i.id !== id; }));
+  }
 
   // ---- RSVP persistence: remembers a clicked [data-rsvp] button across reloads ----
+  // Stores a timestamp (not just a flag) so notifications can show "X ago".
   function isRsvpDone(key) {
-    try { return window.localStorage.getItem('uv-rsvp-' + key) === '1'; } catch (e) { return false; }
+    try { return window.localStorage.getItem('uv-rsvp-' + key) !== null; } catch (e) { return false; }
   }
   function setRsvpDone(key) {
-    try { window.localStorage.setItem('uv-rsvp-' + key, '1'); } catch (e) {}
+    try { window.localStorage.setItem('uv-rsvp-' + key, String(Date.now())); } catch (e) {}
+  }
+  function clearRsvpDone(key) {
+    try { window.localStorage.removeItem('uv-rsvp-' + key); } catch (e) {}
+  }
+
+  // ---- NOTIF READ STATE: for notification kinds that aren't tied to an existing
+  // read flag (societies joined, upcoming calendar events) — lets "mark all read"
+  // actually stick, instead of the same items reappearing every time you reopen the panel ----
+  function isNotifRead(id) {
+    try { return (JSON.parse(window.localStorage.getItem('uv-notif-read')) || []).indexOf(id) !== -1; } catch (e) { return false; }
+  }
+  function markNotifRead(id) {
+    try {
+      var arr = JSON.parse(window.localStorage.getItem('uv-notif-read')) || [];
+      if (arr.indexOf(id) === -1) { arr.push(id); window.localStorage.setItem('uv-notif-read', JSON.stringify(arr)); }
+    } catch (e) {}
+  }
+
+  // ---- SAVED: a personal list, built from anything saved anywhere on the site ----
+  function getSaved() {
+    try { return JSON.parse(window.localStorage.getItem('uv-saved')) || []; } catch (e) { return []; }
+  }
+  function saveSavedItems(items) {
+    try { window.localStorage.setItem('uv-saved', JSON.stringify(items)); } catch (e) {}
+  }
+  function isSaved(id) {
+    return getSaved().some(function (i) { return i.id === id; });
+  }
+  // Adds if not already saved, removes if it is. Returns the new saved state.
+  function toggleSaved(item) {
+    var items = getSaved();
+    var idx = items.findIndex(function (i) { return i.id === item.id; });
+    if (idx === -1) { items.unshift(item); saveSavedItems(items); return true; }
+    items.splice(idx, 1); saveSavedItems(items); return false;
   }
 
   document.addEventListener('DOMContentLoaded', function () {
@@ -96,24 +134,173 @@
       });
     }
 
+    // ---- notifications: messages, societies you've joined, and what's coming up ----
+    var notifBtn = document.getElementById('notifBtn');
+    var notifPanel = document.getElementById('notifPanel');
+    var notifDot = document.getElementById('notifDot');
+    var notifList = document.getElementById('notifList');
+    var notifMarkAll = document.getElementById('notifMarkAll');
+    if (notifBtn && notifPanel && notifList) {
+      function notifTimeAgo(ts) {
+        var mins = Math.floor((Date.now() - ts) / 60000);
+        if (mins < 1) return 'Just now';
+        if (mins < 60) return mins + 'm ago';
+        var hrs = Math.floor(mins / 60);
+        if (hrs < 24) return hrs + 'h ago';
+        return Math.floor(hrs / 24) + 'd ago';
+      }
+      function notifWhen(dateStr) {
+        var target = new Date(dateStr + 'T00:00:00');
+        var today = new Date(); today.setHours(0, 0, 0, 0);
+        var diff = Math.round((target - today) / 86400000);
+        if (diff < 0) return null;
+        if (diff === 0) return 'Today';
+        if (diff === 1) return 'Tomorrow';
+        return 'In ' + diff + ' days';
+      }
+      var ICON_CHAT = '<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>';
+      var ICON_SOC = '<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>';
+      var ICON_CAL = '<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path stroke-linecap="round" d="M3 10h18M8 2v4M16 2v4"/></svg>';
+
+      function notifItem(icon, title, meta, url) {
+        return '<a class="notif-item" href="' + url + '">'
+          + '<div class="notif-ic">' + icon + '</div>'
+          + '<div class="notif-body"><div class="notif-title">' + title + '</div>'
+          + '<div class="notif-meta">' + meta + '</div></div></a>';
+      }
+
+      // ids of everything currently unread, so "mark all read" knows what to clear
+      var unreadThreadSlugs = [];
+      var unreadNotifIds = [];
+
+      function buildNotifications() {
+        unreadThreadSlugs = [];
+        unreadNotifIds = [];
+        var messagesHtml = [];
+        if (window.UV_THREADS) {
+          window.UV_THREADS.forEach(function (th) {
+            var read = false;
+            try { read = window.localStorage.getItem('uv-msg-read-' + th.slug) !== null; } catch (e) {}
+            if (th.unread && !read) {
+              unreadThreadSlugs.push(th.slug);
+              messagesHtml.push(notifItem('%%CHAT%%', th.name + ': ' + th.preview, 'New message', 'messages.html'));
+            }
+          });
+        }
+
+        var societiesHtml = [];
+        try {
+          Object.keys(window.localStorage).filter(function (k) { return k.indexOf('uv-joined-') === 0; })
+            .map(function (k) { return { slug: k.replace('uv-joined-', ''), raw: window.localStorage.getItem(k) }; })
+            .map(function (j) { var ts = parseInt(j.raw, 10); return { slug: j.slug, ts: isNaN(ts) ? 0 : ts }; })
+            .sort(function (a, b) { return b.ts - a.ts; })
+            .slice(0, 5)
+            .forEach(function (j) {
+              var id = 'soc:' + j.slug;
+              if (isNotifRead(id)) return;
+              unreadNotifIds.push(id);
+              var match = (window.UV_SEARCH || []).find(function (i) { return i.u === 'society-' + j.slug + '.html'; });
+              var name = match ? match.t : j.slug;
+              societiesHtml.push(notifItem('%%SOC%%', "You're in! Welcome to " + name, j.ts ? notifTimeAgo(j.ts) : 'Joined', 'society-' + j.slug + '.html'));
+            });
+        } catch (e) {}
+
+        var upcomingHtml = [];
+        try {
+          (JSON.parse(window.localStorage.getItem('uv-calendar')) || [])
+            .map(function (ev) { return { ev: ev, when: notifWhen(ev.date) }; })
+            .filter(function (x) { return x.when; })
+            .sort(function (a, b) { return a.ev.date < b.ev.date ? -1 : 1; })
+            .slice(0, 5)
+            .forEach(function (x) {
+              var id = 'cal:' + x.ev.id;
+              if (isNotifRead(id)) return;
+              unreadNotifIds.push(id);
+              var meta = x.when + (x.ev.time ? ' · ' + x.ev.time : '');
+              upcomingHtml.push(notifItem('%%CAL%%', x.ev.title, meta, 'profile.html'));
+            });
+        } catch (e) {}
+
+        var total = messagesHtml.length + societiesHtml.length + upcomingHtml.length;
+        notifDot.hidden = total === 0;
+        if (notifMarkAll) notifMarkAll.hidden = total === 0;
+
+        if (total === 0) {
+          notifList.innerHTML = '<div class="notif-empty">You\'re all caught up — nothing new.</div>';
+          return;
+        }
+        var html = '';
+        if (messagesHtml.length) html += '<div class="notif-section-label">Messages</div>' + messagesHtml.join('');
+        if (societiesHtml.length) html += '<div class="notif-section-label">Societies</div>' + societiesHtml.join('');
+        if (upcomingHtml.length) html += '<div class="notif-section-label">Coming up</div>' + upcomingHtml.join('');
+        notifList.innerHTML = html
+          .split('%%CHAT%%').join(ICON_CHAT)
+          .split('%%SOC%%').join(ICON_SOC)
+          .split('%%CAL%%').join(ICON_CAL);
+      }
+
+      buildNotifications();
+      notifBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var opening = notifPanel.hidden;
+        notifPanel.hidden = !notifPanel.hidden;
+        if (opening) buildNotifications();
+      });
+      document.addEventListener('click', function (e) {
+        if (!notifPanel.contains(e.target) && e.target !== notifBtn) notifPanel.hidden = true;
+      });
+      if (notifMarkAll) {
+        notifMarkAll.addEventListener('click', function (e) {
+          e.stopPropagation();
+          unreadThreadSlugs.forEach(function (slug) {
+            try { window.localStorage.setItem('uv-msg-read-' + slug, '1'); } catch (e2) {}
+          });
+          unreadNotifIds.forEach(markNotifRead);
+          buildNotifications();
+        });
+      }
+    }
+
     // ---- filter chips ----
-    // Mostly decorative (visual toggle only). The one exception: a "Freshers Week"
-    // chip actually filters its grid down to freshers-tagged cards, when present.
-    // Grid is found via an explicit data-filter-grid id when set (robust), falling
-    // back to "whatever follows the chips" for the purely-decorative rows elsewhere.
+    // Every chip group actually filters its grid now, not just the Freshers Week one.
+    // A chip declares what it's testing for via its own data attribute, checked against the
+    // matching data attribute on each card:
+    //   .freshers-chip          -> card has [data-freshers]
+    //   data-free="1"           -> card has [data-free] (no paid ticket link)
+    //   data-venue="Home/Away"  -> card's data-venue matches exactly
+    //   data-maxprice="450"     -> card's data-price (a number) is under that
+    //   data-cat="X"            -> card's data-cat (space-separated — a card can carry more
+    //                              than one, e.g. an event that's both "Social" and "Societies")
+    //                              contains that value
+    //   none of the above       -> "All" — matches everything
+    // Grid is found via an explicit data-filter-grid id when set (robust), falling back to
+    // "whatever follows the chips" otherwise. The map page (venueGrid) and the full society
+    // directory (socDirGrid) have their own dedicated, more involved filter logic elsewhere
+    // (combined with the map's markers / the directory's search box), so they're skipped here.
+    function chipMatchesCard(chip, card) {
+      if (chip.classList.contains('freshers-chip')) return card.hasAttribute('data-freshers');
+      if (chip.dataset.free) return card.hasAttribute('data-free');
+      if (chip.dataset.venue) return card.dataset.venue === chip.dataset.venue;
+      if (chip.dataset.maxprice) {
+        if (card.dataset.price === undefined) return false;
+        return parseInt(card.dataset.price, 10) < parseInt(chip.dataset.maxprice, 10);
+      }
+      if (chip.dataset.cat) {
+        var tokens = (card.dataset.cat || '').split(' ');
+        return tokens.indexOf(chip.dataset.cat) !== -1;
+      }
+      return true;
+    }
     document.querySelectorAll('.chips').forEach(function (group) {
+      if (group.classList.contains('soc-dir-chips') || group.id === 'mapChips') return;
       var grid = group.dataset.filterGrid ? document.getElementById(group.dataset.filterGrid) : group.nextElementSibling;
-      var hasFreshersCards = grid && grid.querySelector && grid.querySelector('[data-freshers]');
+      if (!grid) return;
+      var cards = Array.from(grid.querySelectorAll('.card, .post'));
       group.querySelectorAll('.chip').forEach(function (c) {
         c.addEventListener('click', function () {
           group.querySelectorAll('.chip').forEach(function (x) { x.classList.remove('on'); });
           c.classList.add('on');
-          if (hasFreshersCards) {
-            var wantFreshers = c.classList.contains('freshers-chip');
-            grid.querySelectorAll('.card').forEach(function (card) {
-              card.hidden = wantFreshers && !card.hasAttribute('data-freshers');
-            });
-          }
+          cards.forEach(function (card) { card.hidden = !chipMatchesCard(c, card); });
         });
       });
     });
@@ -127,27 +314,43 @@
     });
 
     // ---- RSVP / action button feedback ----
-    // Remembers itself across reloads: buttons tied to a calendar entry key off
-    // title+date (matching the calendar's own id), others use an explicit
-    // data-rsvp-key. Buttons with neither (e.g. venue/society ones, which have
-    // their own dedicated persistence already) just keep today's session-only feel.
+    // Toggles both ways: click once to RSVP, click again to undo (a wrong tap or a
+    // change of mind shouldn't be permanent). Remembers itself across reloads:
+    // buttons tied to a calendar entry key off title+date (matching the calendar's
+    // own id), others use an explicit data-rsvp-key. The venue map's own RSVP
+    // buttons (.venue-rsvp) are handled separately below, alongside the pin/count logic.
     document.querySelectorAll('[data-rsvp]').forEach(function (btn) {
+      if (btn.classList.contains('venue-rsvp')) return;
       var key = btn.dataset.rsvpKey
         || (btn.dataset.calTitle && btn.dataset.calDate ? btn.dataset.calTitle + '|' + btn.dataset.calDate : null);
+      var calId = (btn.dataset.calTitle && btn.dataset.calDate) ? btn.dataset.calTitle + '|' + btn.dataset.calDate : null;
+      var beforeLabel = btn.textContent;
 
-      if (key && isRsvpDone(key)) {
+      function setDone() {
         btn.dataset.done = '1';
         btn.textContent = btn.dataset.rsvp;
+        btn.title = 'Click to cancel';
+      }
+      function setUndone() {
+        btn.dataset.done = '0';
+        btn.textContent = beforeLabel;
+        btn.removeAttribute('title');
       }
 
+      if (key && isRsvpDone(key)) setDone();
+
       btn.addEventListener('click', function () {
-        if (btn.dataset.done === '1') return;
-        btn.dataset.done = '1';
-        btn.textContent = btn.dataset.rsvp;
+        if (btn.dataset.done === '1') {
+          setUndone();
+          if (key) clearRsvpDone(key);
+          if (calId) removeFromCalendar(calId);
+          return;
+        }
+        setDone();
         if (key) setRsvpDone(key);
-        if (btn.dataset.calTitle && btn.dataset.calDate) {
+        if (calId) {
           addToCalendar({
-            id: btn.dataset.calTitle + '|' + btn.dataset.calDate,
+            id: calId,
             title: btn.dataset.calTitle,
             date: btn.dataset.calDate,
             time: btn.dataset.calTime || '',
@@ -160,10 +363,72 @@
 
     // ---- save hearts ----
     document.querySelectorAll('.save-heart').forEach(function (h) {
+      var item = {
+        id: h.dataset.saveId, title: h.dataset.saveTitle, type: h.dataset.saveType,
+        url: h.dataset.saveUrl, meta: h.dataset.saveMeta, color: h.dataset.saveColor
+      };
+      function applyState(on) {
+        h.classList.toggle('on', on);
+        h.style.color = on ? 'var(--coral)' : '#fff';
+      }
+      if (item.id && isSaved(item.id)) applyState(true);
       h.addEventListener('click', function () {
-        h.classList.toggle('on');
-        h.style.color = h.classList.contains('on') ? 'var(--coral)' : '#fff';
+        if (!item.id) { applyState(!h.classList.contains('on')); return; }
+        applyState(toggleSaved(item));
       });
+    });
+
+    // ---- save toggles (text/emoji "Save" buttons, e.g. Feed posts, Opportunities) ----
+    document.querySelectorAll('.save-toggle').forEach(function (el) {
+      var item = {
+        id: el.dataset.saveId, title: el.dataset.saveTitle, type: el.dataset.saveType,
+        url: el.dataset.saveUrl, meta: el.dataset.saveMeta, color: el.dataset.saveColor
+      };
+      var defaultLabel = el.textContent.trim();
+      var savedLabel = el.dataset.savedLabel || 'Saved ✓';
+      function refresh() {
+        var saved = isSaved(item.id);
+        el.textContent = saved ? savedLabel : defaultLabel;
+        el.classList.toggle('saved-active', saved);
+      }
+      if (item.id) refresh();
+      el.addEventListener('click', function () {
+        if (!item.id) return;
+        toggleSaved(item);
+        refresh();
+      });
+    });
+
+    // ---- saved list (full page + the Account page's preview widget) ----
+    var ICON_CLOSE = '<svg fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" d="M6 6l12 12M18 6L6 18"/></svg>';
+    function savedRowHtml(it, preview) {
+      var meta = it.meta ? '<div class="saved-meta">' + it.meta + '</div>' : '';
+      var remove = preview ? '' : '<button class="saved-remove" data-id="' + it.id + '" aria-label="Remove from saved">' + ICON_CLOSE + '</button>';
+      return '<div class="saved-row">'
+        + '<span class="saved-type" style="background:' + (it.color || 'var(--lime)') + '">' + it.type + '</span>'
+        + '<a class="saved-body" href="' + it.url + '"><div class="saved-title">' + it.title + '</div>' + meta + '</a>'
+        + remove + '</div>';
+    }
+    document.querySelectorAll('#savedList, #savedPreviewList').forEach(function (list) {
+      var preview = list.dataset.preview === '1';
+      function render() {
+        var items = getSaved();
+        if (preview) items = items.slice(0, 3);
+        if (!items.length) {
+          list.innerHTML = '<div class="saved-empty">' + (preview
+            ? 'Nothing saved yet.'
+            : 'Nothing saved yet — tap the heart or "Save" on anything across the site and it\'ll show up here.') + '</div>';
+          return;
+        }
+        list.innerHTML = items.map(function (it) { return savedRowHtml(it, preview); }).join('');
+        list.querySelectorAll('.saved-remove').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            toggleSaved({ id: btn.dataset.id });
+            render();
+          });
+        });
+      }
+      render();
     });
 
     // ---- join buttons (societies) ----
@@ -171,10 +436,10 @@
     // once the (simulated) host accepts the request. The Feed's small "trending
     // societies" widget has no data-society — those just toggle Join/Joined.
     function isSocietyJoined(slug) {
-      try { return window.localStorage.getItem('uv-joined-' + slug) === '1'; } catch (e) { return false; }
+      try { return window.localStorage.getItem('uv-joined-' + slug) !== null; } catch (e) { return false; }
     }
     function setSocietyJoined(slug) {
-      try { window.localStorage.setItem('uv-joined-' + slug, '1'); } catch (e) {}
+      try { window.localStorage.setItem('uv-joined-' + slug, String(Date.now())); } catch (e) {}
     }
     document.querySelectorAll('.soc-join').forEach(function (b) {
       var slug = b.dataset.society;
@@ -202,9 +467,113 @@
           b.textContent = 'Joined ✓';
           setSocietyJoined(slug);
           if (viewLink) viewLink.hidden = false;
+          renderYourSocieties();
         }, 1400);
       });
     });
+
+    // ---- "Your Societies" widget (societies.html) — every joined society, resolved against ----
+    // the sitewide search index so both the featured 4 and the real 265-entry directory work.
+    function renderYourSocieties() {
+      var list = document.getElementById('yourSocList');
+      if (!list) return;
+      var joined = [];
+      try {
+        joined = Object.keys(window.localStorage)
+          .filter(function (k) { return k.indexOf('uv-joined-') === 0; })
+          .map(function (k) {
+            var slug = k.replace('uv-joined-', '');
+            var ts = parseInt(window.localStorage.getItem(k), 10);
+            var match = (window.UV_SEARCH || []).find(function (i) {
+              return i.u === 'society-' + slug + '.html' || i.u === 'societies.html?soc=' + slug;
+            });
+            return match ? { name: match.t, cat: match.c, url: match.u, ts: isNaN(ts) ? 0 : ts } : null;
+          })
+          .filter(Boolean)
+          .sort(function (a, b) { return b.ts - a.ts; });
+      } catch (e) {}
+
+      if (!joined.length) {
+        list.innerHTML = '<div class="your-soc-empty">You haven\'t joined any societies yet — join one on the left and it\'ll show up here.</div>';
+        return;
+      }
+      var shown = joined.slice(0, 8);
+      list.innerHTML = shown.map(function (s) {
+        return '<a class="soc-row" href="' + s.url + '">'
+          + '<div class="soc-row-ava" style="background:var(--lime)">' + initialsOf(s.name) + '</div>'
+          + '<div class="soc-row-body"><div class="soc-row-name">' + s.name + '</div>'
+          + '<div class="soc-row-cat">' + s.cat + '</div></div></a>';
+      }).join('');
+      if (joined.length > shown.length) {
+        list.innerHTML += '<div class="your-soc-more">+' + (joined.length - shown.length) + ' more</div>';
+      }
+    }
+    function initialsOf(name) {
+      var words = name.match(/[A-Za-z0-9]+/g) || [];
+      if (!words.length) return '?';
+      if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+      return (words[0][0] + words[1][0]).toUpperCase();
+    }
+    renderYourSocieties();
+
+    // ---- full society directory: search + category filter, combined (societies.html) ----
+    var socDirGrid = document.getElementById('socDirGrid');
+    if (socDirGrid) {
+      var socDirRows = Array.from(socDirGrid.querySelectorAll('.soc-row'));
+      var socDirSearch = document.getElementById('socDirSearch');
+      var socDirClear = document.getElementById('socDirSearchClear');
+      var socDirMatchCount = document.getElementById('socDirMatchCount');
+      var socDirEmpty = document.getElementById('socDirEmpty');
+      var socDirEmptyQuery = document.getElementById('socDirEmptyQuery');
+      var socDirChips = document.querySelectorAll('.soc-dir-chips .chip');
+      var activeCat = '';
+
+      function applySocDirFilter() {
+        var q = (socDirSearch.value || '').trim().toLowerCase();
+        if (socDirClear) socDirClear.classList.toggle('show', q.length > 0);
+        var visible = 0;
+        socDirRows.forEach(function (row) {
+          var matchesCat = !activeCat || row.dataset.cat === activeCat;
+          var matchesQuery = !q || row.dataset.search.indexOf(q) !== -1;
+          var show = matchesCat && matchesQuery;
+          row.hidden = !show;
+          if (show) visible++;
+        });
+        if (socDirMatchCount) socDirMatchCount.textContent = q ? (visible + (visible === 1 ? ' match' : ' matches')) : '';
+        if (socDirEmpty) socDirEmpty.hidden = visible > 0;
+        if (socDirEmptyQuery) socDirEmptyQuery.textContent = socDirSearch.value.trim();
+      }
+      if (socDirSearch) {
+        socDirSearch.addEventListener('input', applySocDirFilter);
+        if (socDirClear) {
+          socDirClear.addEventListener('click', function () {
+            socDirSearch.value = '';
+            applySocDirFilter();
+            socDirSearch.focus();
+          });
+        }
+      }
+      socDirChips.forEach(function (chip) {
+        chip.addEventListener('click', function () {
+          activeCat = chip.dataset.cat || '';
+          applySocDirFilter();
+        });
+      });
+
+      // ---- deep link from sitewide search: societies.html?soc=<slug> scrolls straight to it ----
+      var wantedSlug = new URLSearchParams(window.location.search).get('soc');
+      if (wantedSlug) {
+        var wantedBtn = socDirGrid.querySelector('.soc-join[data-society="' + wantedSlug + '"]');
+        var wantedRow = wantedBtn ? wantedBtn.closest('.soc-row') : null;
+        if (wantedRow) {
+          setTimeout(function () {
+            wantedRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            wantedRow.classList.add('soc-row-flash');
+            setTimeout(function () { wantedRow.classList.remove('soc-row-flash'); }, 2200);
+          }, 100);
+        }
+      }
+    }
 
     // ---- society chat: post your own message into the group thread ----
     var socChatInput = document.querySelector('.soc-chat-field');
@@ -249,6 +618,9 @@
       }
       function setGoing(name) {
         try { window.sessionStorage.setItem(goingKey(name), '1'); } catch (e) {}
+      }
+      function clearGoing(name) {
+        try { window.sessionStorage.removeItem(goingKey(name)); } catch (e) {}
       }
 
       // pin/badge colour by exact going count — green under 20, orange 20-69, red 70+
@@ -301,13 +673,14 @@
           return '<strong>' + name + '</strong><span class="popup-cat">' + cat + '</span>'
             + '<div class="popup-going"><i class="busy-dot" style="background:' + currentColor() + '"></i>' + count + ' ' + goingWord + '</div>'
             + ticketHtml
-            + '<button class="pill primary popup-rsvp"' + (going ? ' disabled' : '') + '>'
+            + '<button class="pill primary popup-rsvp"' + (going ? ' title="Click to cancel"' : '') + '>'
             + (going ? "You're in 🎉" : rsvpWord) + '</button>';
         }
 
         var marker = L.marker([lat, lng], { icon: pinIcon(currentColor()) }).addTo(venueMap).bindPopup(popupHtml());
 
         var cardBtn = card.querySelector('.venue-rsvp');
+        var cardBtnBeforeLabel = cardBtn ? cardBtn.textContent : '';
         var dotEl = card.querySelector('.busy-dot');
         var numEl = card.querySelector('.going-count');
 
@@ -321,12 +694,17 @@
 
         marker.on('popupopen', function (e) {
           var popupBtn = e.popup.getElement().querySelector('.popup-rsvp');
-          if (popupBtn && !popupBtn.disabled) {
+          if (popupBtn) {
             popupBtn.addEventListener('click', function () {
-              setGoing(name);
+              if (isGoing(name)) {
+                clearGoing(name);
+                removeFromCalendar('venue|' + name);
+              } else {
+                setGoing(name);
+                addVenueToCalendar();
+              }
               refreshUI();
               syncCardButton();
-              addVenueToCalendar();
             });
           }
         });
@@ -340,36 +718,46 @@
         }
 
         function syncCardButton() {
-          if (cardBtn && isGoing(name)) {
-            cardBtn.dataset.done = '1';
-            cardBtn.textContent = cardBtn.dataset.rsvp;
-          }
+          if (!cardBtn) return;
+          var going = isGoing(name);
+          cardBtn.dataset.done = going ? '1' : '0';
+          cardBtn.textContent = going ? cardBtn.dataset.rsvp : cardBtnBeforeLabel;
+          if (going) cardBtn.title = 'Click to cancel';
+          else cardBtn.removeAttribute('title');
         }
         syncCardButton();
         if (cardBtn) {
           cardBtn.addEventListener('click', function () {
-            setGoing(name);
+            if (isGoing(name)) {
+              clearGoing(name);
+              removeFromCalendar('venue|' + name);
+            } else {
+              setGoing(name);
+              addVenueToCalendar();
+            }
             refreshUI();
-            addVenueToCalendar();
+            syncCardButton();
           });
         }
 
-        venues.push({ card: card, marker: marker, lat: lat, lng: lng, search: card.dataset.search || '' });
+        venues.push({ card: card, marker: marker, lat: lat, lng: lng, search: card.dataset.search || '', cat: card.dataset.cat || '' });
       });
 
-      // ---- search: filters cards + pins together, zooms the map to the matches ----
+      // ---- search + category chips: filter cards & pins together, zoom the map to the matches ----
       var searchInput = document.getElementById('venueSearch');
       var clearBtn = document.getElementById('venueSearchClear');
       var matchCount = document.getElementById('venueMatchCount');
       var emptyState = document.getElementById('venueEmpty');
       var emptyQuery = document.getElementById('venueEmptyQuery');
+      var mapChips = document.querySelectorAll('#mapChips .chip');
+      var activeCat = '';
 
       function runSearch() {
         var q = (searchInput.value || '').trim().toLowerCase();
         if (clearBtn) clearBtn.classList.toggle('show', q.length > 0);
         var visible = [];
         venues.forEach(function (v) {
-          var match = !q || v.search.indexOf(q) !== -1;
+          var match = (!q || v.search.indexOf(q) !== -1) && (!activeCat || v.cat === activeCat);
           v.card.hidden = !match;
           if (match) {
             if (!venueMap.hasLayer(v.marker)) v.marker.addTo(venueMap);
@@ -397,6 +785,14 @@
           });
         }
       }
+      mapChips.forEach(function (chip) {
+        chip.addEventListener('click', function () {
+          mapChips.forEach(function (x) { x.classList.remove('on'); });
+          chip.classList.add('on');
+          activeCat = chip.dataset.cat || '';
+          runSearch();
+        });
+      });
     }
 
     // ---- profile stat strip: numbers respond to real joins/RSVPs, on top of the starting baseline ----
@@ -562,6 +958,7 @@
         el.classList.add('active');
         var dot = el.querySelector('.msg-unread-dot');
         if (dot) dot.remove();
+        try { window.localStorage.setItem('uv-msg-read-' + el.dataset.thread, '1'); } catch (e) {}
         convName.textContent = el.dataset.name;
         convSub.textContent = el.dataset.sub;
         convAva.style.background = el.dataset.bg;
@@ -632,6 +1029,111 @@
       if (chatSend) chatSend.addEventListener('click', function () { sendChat(chatInput.value.trim()); chatInput.value = ''; });
       document.querySelectorAll('.chat-suggest .cs').forEach(function (s) {
         s.addEventListener('click', function () { sendChat(s.textContent.trim()); });
+      });
+    }
+
+    // ---- login / sign-up page ----
+    var loginForm = document.getElementById('loginForm');
+    var signupForm = document.getElementById('signupForm');
+    if (loginForm && signupForm) {
+      var authTitle = document.getElementById('authTitle');
+      var authSub = document.getElementById('authSub');
+      var tabs = document.querySelectorAll('.auth-tab');
+      function showTab(name) {
+        var isSignup = name === 'signup';
+        loginForm.hidden = isSignup;
+        signupForm.hidden = !isSignup;
+        tabs.forEach(function (t) { t.classList.toggle('active', t.dataset.tab === name); });
+        if (authTitle) authTitle.textContent = isSignup ? 'Join Uni-Verse' : 'Welcome back';
+        if (authSub) authSub.textContent = isSignup
+          ? 'Sign up with your Cardiff student email'
+          : 'Log in with your Cardiff student email';
+      }
+      tabs.forEach(function (t) {
+        t.addEventListener('click', function () { showTab(t.dataset.tab); });
+      });
+      if (window.location.hash === '#signup') showTab('signup');
+
+      function fieldError(box, msg) {
+        if (!box) return;
+        box.textContent = msg;
+        box.hidden = false;
+      }
+      function clearErrors(form) {
+        form.querySelectorAll('.field-invalid').forEach(function (f) { f.classList.remove('field-invalid'); });
+        var err = form.querySelector('.field-error');
+        if (err) { err.hidden = true; err.textContent = ''; }
+      }
+      function markInvalid(input) {
+        var field = input.closest('.field');
+        if (field) field.classList.add('field-invalid');
+      }
+      function goToApp(user) {
+        try { localStorage.setItem('uv-user', JSON.stringify(user)); } catch (e) {}
+        window.location.href = 'feed.html';
+      }
+
+      signupForm.addEventListener('submit', function (e) {
+        e.preventDefault();
+        clearErrors(signupForm);
+        var errBox = document.getElementById('signupError');
+        var name = signupForm.name.value.trim();
+        var username = signupForm.username.value.trim();
+        var email = signupForm.email.value.trim();
+        var pw = signupForm.password.value;
+        var pw2 = signupForm.password2.value;
+        var bad = false;
+        [signupForm.name, signupForm.username, signupForm.email, signupForm.password, signupForm.password2].forEach(function (input) {
+          if (!input.value.trim()) { markInvalid(input); bad = true; }
+        });
+        if (bad) { fieldError(errBox, 'Fill in every field to create your account.'); return; }
+        if (!/^[^\s@]+@[^\s@]*cardiff\.ac\.uk$/i.test(email)) {
+          markInvalid(signupForm.email);
+          fieldError(errBox, 'Use your Cardiff student email (ends in @cardiff.ac.uk).');
+          return;
+        }
+        if (pw.length < 8) {
+          markInvalid(signupForm.password);
+          fieldError(errBox, 'Password needs to be at least 8 characters.');
+          return;
+        }
+        if (pw !== pw2) {
+          markInvalid(signupForm.password);
+          markInvalid(signupForm.password2);
+          fieldError(errBox, 'Passwords don\'t match — check both fields.');
+          return;
+        }
+        goToApp({ name: name, username: username, email: email });
+      });
+
+      loginForm.addEventListener('submit', function (e) {
+        e.preventDefault();
+        clearErrors(loginForm);
+        var errBox = document.getElementById('loginError');
+        var email = loginForm.email.value.trim();
+        var pw = loginForm.password.value;
+        var bad = false;
+        [loginForm.email, loginForm.password].forEach(function (input) {
+          if (!input.value.trim()) { markInvalid(input); bad = true; }
+        });
+        if (bad) { fieldError(errBox, 'Enter your email and password.'); return; }
+        if (!/^[^\s@]+@[^\s@]*cardiff\.ac\.uk$/i.test(email)) {
+          markInvalid(loginForm.email);
+          fieldError(errBox, 'Use your Cardiff student email (ends in @cardiff.ac.uk).');
+          return;
+        }
+        var existing = null;
+        try { existing = JSON.parse(localStorage.getItem('uv-user') || 'null'); } catch (e2) {}
+        goToApp({ name: existing && existing.name, username: existing && existing.username, email: email });
+      });
+    }
+
+    // ---- log out ----
+    var logoutBtn = document.getElementById('logoutBtn');
+    if (logoutBtn) {
+      logoutBtn.addEventListener('click', function () {
+        try { window.localStorage.removeItem('uv-user'); } catch (e) {}
+        window.location.href = 'index.html';
       });
     }
   });
